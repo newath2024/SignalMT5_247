@@ -1,0 +1,7 @@
+.env
+watch_cache.json
+alert_cache.json
+__pycache__/
+build/
+dist/
+*.spec
