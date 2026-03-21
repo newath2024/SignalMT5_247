@@ -4,7 +4,12 @@
       "EURUSD",
       "GBPUSD",
       "USDJPY",
-      "XAUUSD"
+      "AUDUSD",
+      "USDCAD",
+      "USDCHF",
+      "XAUUSD",
+      "BTCUSD",
+      "ETHUSD"
     ],
     "loop_interval_sec": 60,
     "alert_mode": "both"
