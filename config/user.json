@@ -1,0 +1,15 @@
+{
+  "scanner": {
+    "symbols": [
+      "EURUSD",
+      "GBPUSD",
+      "USDJPY",
+      "XAUUSD"
+    ],
+    "loop_interval_sec": 60,
+    "alert_mode": "both"
+  },
+  "telegram": {
+    "enabled": true
+  }
+}

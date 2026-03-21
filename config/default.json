@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "app": {
+    "name": "OpenClaw Scanner",
+    "version": "2.0.0",
+    "strategy_version": "1.0.0",
+    "tagline": "Production-grade local desktop scanner for HTF/LTF MT5 signals."
+  },
+  "scanner": {
+    "symbols": [
+      "EURUSD",
+      "GBPUSD",
+      "USDJPY",
+      "AUDUSD",
+      "USDCAD",
+      "USDCHF",
+      "XAUUSD",
+      "BTCUSD",
+      "ETHUSD"
+    ],
+    "htf_timeframes": [
+      "H1",
+      "H4"
+    ],
+    "ltf_timeframes": [
+      "M3",
+      "M5",
+      "M15"
+    ],
+    "loop_interval_sec": 60,
+    "strict_ifvg": true,
+    "entry_model": "ifvg_first_edge",
+    "sl_model": "origin_candle_extreme",
+    "alert_mode": "both",
+    "cooldown_sec": 1800
+  },
+  "telegram": {
+    "enabled": true,
+    "bot_token": "",
+    "chat_id": ""
+  },
+  "storage": {
+    "state_backend": "json",
+    "history_backend": "sqlite"
+  }
+}

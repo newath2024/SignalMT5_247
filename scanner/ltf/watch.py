@@ -1,8 +1,22 @@
-from ..config.ltf import TRIGGER_TIMEFRAMES, WATCH_EXPIRY_BARS, WATCH_INVALIDATION_BUFFER_POINTS
-from ..htf import evaluate_htf_zone
-from ..state.watch_cache import get_symbol_watches, remove_watch_setup, upsert_watch_setup
-from ..utils import notify_once
-from .sweep import detect_ltf_watch_trigger
+if __package__ in (None, ""):
+    import sys
+    from pathlib import Path
+
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
+
+    from scanner.config.ltf import TRIGGER_TIMEFRAMES, WATCH_EXPIRY_BARS, WATCH_INVALIDATION_BUFFER_POINTS
+    from scanner.htf import evaluate_htf_zone
+    from scanner.state.watch_cache import get_symbol_watches, remove_watch_setup, upsert_watch_setup
+    from scanner.utils import notify_once
+    from scanner.ltf.sweep import detect_ltf_watch_trigger
+else:
+    from ..config.ltf import TRIGGER_TIMEFRAMES, WATCH_EXPIRY_BARS, WATCH_INVALIDATION_BUFFER_POINTS
+    from ..htf import evaluate_htf_zone
+    from ..state.watch_cache import get_symbol_watches, remove_watch_setup, upsert_watch_setup
+    from ..utils import notify_once
+    from .sweep import detect_ltf_watch_trigger
 
 
 def build_watch_setup(snapshot, context, trigger, trigger_timeframe):
@@ -127,3 +141,13 @@ def update_watchlist(snapshot, all_htf_zones, contexts):
             armed.append(stored)
 
     return armed, removed
+
+
+if __name__ == "__main__":
+    raise SystemExit(
+        "scanner/ltf/watch.py la module noi bo, khong phai file de chay truc tiep.\n"
+        "Hay chay tu thu muc project bang:\n"
+        "  python main.py\n"
+        "hoac:\n"
+        "  python main.py --cli"
+    )

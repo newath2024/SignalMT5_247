@@ -3,6 +3,7 @@ from ..watch_state import (
     get_watch_cache_count,
     get_watch_cache_file,
     get_watch_setup,
+    list_watch_setups,
     mark_watch_alerted,
     remove_watch_setup,
     upsert_watch_setup,
@@ -11,6 +12,7 @@ from ..watch_state import (
 __all__ = [
     "get_watch_setup",
     "get_symbol_watches",
+    "list_watch_setups",
     "upsert_watch_setup",
     "mark_watch_alerted",
     "remove_watch_setup",
