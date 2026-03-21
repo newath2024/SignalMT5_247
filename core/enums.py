@@ -22,6 +22,26 @@ class SignalStage(str, Enum):
     CONFIRMED_SIGNAL = "confirmed_signal"
 
 
+class SetupState(str, Enum):
+    IDLE = "idle"
+    CONTEXT_FOUND = "context_found"
+    ARMED = "armed"
+    WAITING_MSS = "waiting_mss"
+    CONFIRMED = "confirmed"
+    COOLDOWN = "cooldown"
+    REJECTED = "rejected"
+    ERROR = "error"
+
+
+class SetupPhase(str, Enum):
+    HTF_CONTEXT = "HTF_CONTEXT"
+    LTF_SWEEP = "LTF_SWEEP"
+    WAITING_MSS = "WAITING_MSS"
+    IFVG_VALIDATION = "IFVG_VALIDATION"
+    READY = "READY"
+    ALERT_SENT = "ALERT_SENT"
+
+
 class SymbolHealth(str, Enum):
     IDLE = "idle"
     RUNNING = "running"

@@ -36,6 +36,9 @@ CREATE INDEX IF NOT EXISTS idx_alert_history_created_at
 CREATE INDEX IF NOT EXISTS idx_alert_history_symbol_stage
     ON alert_history(symbol, stage);
 
+CREATE INDEX IF NOT EXISTS idx_alert_history_event_key
+    ON alert_history(event_key, stage, channel, status);
+
 CREATE TABLE IF NOT EXISTS rejection_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TEXT NOT NULL,

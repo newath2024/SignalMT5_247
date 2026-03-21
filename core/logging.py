@@ -95,3 +95,7 @@ class StructuredLogger:
         if limit >= len(history):
             return history
         return history[-limit:]
+
+    def clear_recent_history(self):
+        with self._lock:
+            self._history.clear()

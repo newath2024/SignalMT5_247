@@ -1,4 +1,4 @@
-from .config import AppConfig, load_app_config
+from .config import AppConfig, load_app_config, save_user_config_patch
 from .constants import APP_NAME, APP_VERSION, CONFIG_SCHEMA_VERSION, STRATEGY_VERSION
 from .logging import StructuredLogger
 from .paths import (
@@ -30,4 +30,5 @@ __all__ = [
     "USER_CONFIG_FILE",
     "ensure_runtime_layout",
     "load_app_config",
+    "save_user_config_patch",
 ]

@@ -6,6 +6,8 @@ from ..config.htf import (
     HTF_DISTANCE_BODY_THRESHOLD,
     HTF_DISTANCE_NEAR_THRESHOLD,
     HTF_EVALUATION_RECENT_BARS,
+    HTF_OB_INVALIDATION_BUFFER,
+    HTF_OB_INVALIDATION_USE_CLOSE,
     HTF_REACTION_NEAR,
     HTF_REACTION_NEAR_WITH_BODY,
     HTF_REACTION_RESPECTED,
@@ -45,6 +47,42 @@ def determine_htf_structure(snapshot):
     }
 
 
+def is_ob_valid(ob_zone, rates, current_index) -> bool:
+    if ob_zone is None or rates is None or len(rates) == 0:
+        return False
+
+    source_index = ob_zone.get("source_index")
+    if source_index is None:
+        return True
+
+    last_index = min(int(current_index), len(rates) - 1)
+    start_index = int(source_index) + 1
+    if start_index > last_index:
+        return True
+
+    low = float(ob_zone["low"])
+    high = float(ob_zone["high"])
+    bias = ob_zone.get("bias")
+    buffer = float(HTF_OB_INVALIDATION_BUFFER or 0.0)
+
+    for index in range(start_index, last_index + 1):
+        candle = rates[index]
+        if HTF_OB_INVALIDATION_USE_CLOSE:
+            value = float(candle["close"])
+            if bias == "Long" and value < low - buffer:
+                return False
+            if bias == "Short" and value > high + buffer:
+                return False
+            continue
+
+        if bias == "Long" and float(candle["low"]) < low - buffer:
+            return False
+        if bias == "Short" and float(candle["high"]) > high + buffer:
+            return False
+
+    return True
+
+
 def evaluate_htf_zone(zone, snapshot, structure=None):
     price = snapshot["current_price"]
     point = snapshot["point"]
@@ -52,6 +90,29 @@ def evaluate_htf_zone(zone, snapshot, structure=None):
     rates_h4 = snapshot["rates"]["H4"]
     avg_h1 = average_range(rates_h1, 20)
     structure = structure or determine_htf_structure(snapshot)
+    zone_rates = rates_h4 if zone["timeframe"] == "H4" else rates_h1
+    zone_valid = True
+    invalidation_reason = None
+    if zone.get("type") == "OB":
+        zone_valid = is_ob_valid(zone, zone_rates, len(zone_rates) - 1)
+        if not zone_valid:
+            invalidation_reason = "OB invalidated by close break"
+
+    if not zone_valid:
+        return {
+            "zone": zone,
+            "bias": zone["bias"],
+            "zone_quality": zone["quality"],
+            "reaction_clarity": 0.0,
+            "distance_score": 0.0,
+            "structure_trend": structure["trend"],
+            "trend_alignment": "invalidated",
+            "clear": False,
+            "score": -1.0,
+            "valid": False,
+            "invalidation_reason": invalidation_reason,
+        }
+
     recent_bars = (
         rates_h4[-HTF_EVALUATION_RECENT_BARS["H4"] :]
         if zone["timeframe"] == "H4"
@@ -136,4 +197,6 @@ def evaluate_htf_zone(zone, snapshot, structure=None):
         "trend_alignment": trend_alignment,
         "clear": clear,
         "score": composite,
+        "valid": True,
+        "invalidation_reason": None,
     }

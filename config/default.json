@@ -28,6 +28,7 @@
       "M15"
     ],
     "loop_interval_sec": 60,
+    "ob_fvg_mode": "medium",
     "strict_ifvg": true,
     "entry_model": "ifvg_first_edge",
     "sl_model": "origin_candle_extreme",

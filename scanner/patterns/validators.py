@@ -1,4 +1,5 @@
 from ..config.htf import (
+    HTF_OB_REQUIRE_LIQUIDITY_SWEEP,
     HTF_BOS_CLOSE_BUFFER_POINTS,
     HTF_BOS_WICK_BUFFER_POINTS,
     HTF_DISPLACEMENT_MAX_OPPOSITE_BARS,
@@ -57,11 +58,12 @@ def has_overlap_after_zone(rates, zone_low, zone_high, start_index, end_index, p
 
 
 def has_clean_post_ob_move(rates, candidate, break_index, point):
+    overlap_start = int(candidate.get("engulf_index", candidate["source_index"])) + 1
     overlap = has_overlap_after_zone(
         rates,
         candidate["low"],
         candidate["high"],
-        candidate["source_index"] + 1,
+        overlap_start,
         break_index,
         point,
     )
@@ -138,11 +140,24 @@ def is_valid_ob(rates, candidate, avg_range, point, swings, trend, has_fvg=False
             "overlap": overlap,
         }
 
-    liquidity_sweep = has_liquidity_sweep(rates, candidate, swings, point)
     trend_aligned = (
         (candidate["bias"] == "Long" and trend == "Bullish")
         or (candidate["bias"] == "Short" and trend == "Bearish")
     )
+    liquidity_sweep = has_liquidity_sweep(rates, candidate, swings, point)
+    if HTF_OB_REQUIRE_LIQUIDITY_SWEEP and not liquidity_sweep:
+        return {
+            "valid": False,
+            "bos_valid": True,
+            "break_index": bos["break_index"],
+            "swing": bos["swing"],
+            "displacement": bos["displacement"],
+            "overlap": overlap,
+            "liquidity_sweep": liquidity_sweep,
+            "trend": trend,
+            "trend_aligned": trend_aligned,
+        }
+
     countertrend = (
         (candidate["bias"] == "Long" and trend == "Bearish")
         or (candidate["bias"] == "Short" and trend == "Bullish")

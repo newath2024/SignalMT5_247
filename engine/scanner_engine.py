@@ -1,6 +1,9 @@
 import threading
 import time
 
+from core.enums import SetupPhase, SetupState
+from strategy.reason_engine import describe_error
+
 
 class ScannerEngine:
     def __init__(self, config, data_gateway, notifier, state_manager, scan_service, logger):
@@ -12,6 +15,7 @@ class ScannerEngine:
         self.logger = logger
 
         self._lock = threading.RLock()
+        self._scan_lock = threading.RLock()
         self._thread = None
         self._stop_event = None
         self._status = "idle"
@@ -19,19 +23,94 @@ class ScannerEngine:
         self._last_cycle = None
         self._last_error = None
         self._interval_sec = config.scanner.loop_interval_sec
+        persisted = {
+            item["symbol"]: item
+            for item in self.state_manager.list_symbol_states(config.scanner.symbols)
+        }
         self._symbol_states = {
-            symbol: {
-                "symbol": symbol,
-                "status": "idle",
-                "message": "Awaiting first scan cycle",
-                "scanned_at": None,
-                "current_price": None,
-                "timeframe": "-",
-                "bias": "-",
-                "last_rejection": None,
-            }
+            symbol: self._hydrate_symbol_state(symbol, persisted.get(symbol))
             for symbol in config.scanner.symbols
         }
+
+    @staticmethod
+    def _normalize_phase(value: str | None) -> str:
+        mapping = {
+            None: SetupPhase.HTF_CONTEXT.value,
+            "htf scan": SetupPhase.HTF_CONTEXT.value,
+            "ltf confirmation": SetupPhase.LTF_SWEEP.value,
+            "watch armed": SetupPhase.IFVG_VALIDATION.value,
+            "mss confirmation": SetupPhase.WAITING_MSS.value,
+            "signal confirmation": SetupPhase.READY.value,
+            "cooldown": SetupPhase.ALERT_SENT.value,
+            "deduplication": SetupPhase.ALERT_SENT.value,
+            "alert delivery": SetupPhase.ALERT_SENT.value,
+            "alert configuration": SetupPhase.ALERT_SENT.value,
+            "connection": SetupPhase.HTF_CONTEXT.value,
+            "system": SetupPhase.HTF_CONTEXT.value,
+        }
+        return mapping.get(value, value or SetupPhase.HTF_CONTEXT.value)
+
+    def _default_symbol_state(self, symbol: str) -> dict:
+        return {
+            "symbol": symbol,
+            "state": SetupState.IDLE.value,
+            "bias": "neutral",
+            "tf": "-",
+            "phase": SetupPhase.HTF_CONTEXT.value,
+            "reason": "waiting: HTF context",
+            "price": None,
+            "score": None,
+            "grade": None,
+            "last_update": None,
+            "scanned_at": None,
+            "cooldown_remaining": 0,
+            "cooldown_duration_sec": self.config.scanner.cooldown_sec,
+            "cooldown_until": None,
+            "last_alert_time": None,
+            "active_watch_id": None,
+            "htf_context": "-",
+            "transition": None,
+            "detail": {
+                "current_state": SetupState.IDLE.value,
+                "htf_bias": "neutral",
+                "htf_context": "-",
+                "htf_context_reason": "Awaiting first scan cycle",
+                "last_detected_sweep": "-",
+                "last_detected_mss": "-",
+                "last_detected_ifvg": "-",
+                "rejection_reason": "-",
+                "last_alert_time": None,
+                "cooldown_info": "-",
+                "active_watch_id": None,
+                "active_watch_info": "-",
+                "zone": "-",
+                "zone_top_bottom": "-",
+                "score": "-",
+                "last_alert_details": "-",
+                "timeline": "-",
+            },
+        }
+
+    def _hydrate_symbol_state(self, symbol: str, persisted: dict | None) -> dict:
+        state = self._default_symbol_state(symbol)
+        if not persisted:
+            return state
+        hydrated = dict(state)
+        hydrated.update(persisted)
+        hydrated["phase"] = self._normalize_phase(hydrated.get("phase"))
+        detail = dict(state["detail"])
+        detail.update(hydrated.get("detail") or {})
+        detail.setdefault("phase", hydrated["phase"])
+        detail.setdefault("score", "-")
+        detail.setdefault("last_alert_details", "-")
+        detail.setdefault("active_watch_info", "-")
+        detail.setdefault("zone_top_bottom", detail.get("zone", "-"))
+        detail.setdefault("timeline", "-")
+        hydrated["detail"] = detail
+        hydrated.setdefault("score", None)
+        hydrated.setdefault("grade", None)
+        hydrated.setdefault("cooldown_duration_sec", self.config.scanner.cooldown_sec)
+        return hydrated
 
     def set_interval(self, interval_sec: int):
         with self._lock:
@@ -65,32 +144,85 @@ class ScannerEngine:
                 self._status = "stopped"
         return True, "Scanner stopping."
 
+    def _scan_symbol(self, symbol: str) -> dict:
+        try:
+            return self.scan_service.scan_symbol(symbol)
+        except Exception as exc:
+            self.logger.error("Symbol scan failed", symbol=symbol, phase="system", reason=str(exc))
+            return {
+                "symbol": symbol,
+                "state": SetupState.ERROR.value,
+                "bias": "neutral",
+                "tf": "-",
+                "phase": SetupPhase.HTF_CONTEXT.value,
+                "reason": describe_error(str(exc)),
+                "price": None,
+                "score": None,
+                "grade": None,
+                "last_update": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "scanned_at": time.time(),
+                "cooldown_remaining": 0,
+                "cooldown_duration_sec": self.config.scanner.cooldown_sec,
+                "cooldown_until": None,
+                "last_alert_time": None,
+                "active_watch_id": None,
+                "htf_context": "-",
+                "transition": None,
+                "detail": {
+                    "current_state": SetupState.ERROR.value,
+                    "htf_bias": "neutral",
+                    "htf_context": "-",
+                    "htf_context_reason": "Symbol scan failed",
+                    "last_detected_sweep": "-",
+                    "last_detected_mss": "-",
+                    "last_detected_ifvg": "-",
+                    "rejection_reason": "-",
+                    "last_alert_time": None,
+                    "cooldown_info": "-",
+                    "active_watch_id": None,
+                    "active_watch_info": "-",
+                    "zone": "-",
+                    "zone_top_bottom": "-",
+                    "score": "-",
+                    "last_alert_details": "-",
+                    "timeline": "-",
+                },
+            }
+
+    def _store_symbol_result(self, result: dict):
+        with self._lock:
+            self._symbol_states[result["symbol"]] = dict(result)
+
     def run_once(self):
         if not self.data_gateway.ensure_connected():
             return []
         return self._run_cycle()
 
+    def rescan_now(self):
+        if not self.data_gateway.ensure_connected():
+            return []
+        self.logger.info("Manual rescan requested", phase="system", reason="operator action")
+        return self._run_cycle()
+
+    def rescan_symbol(self, symbol: str):
+        if symbol not in self.config.scanner.symbols:
+            raise ValueError(f"Unknown symbol: {symbol}")
+        if not self.data_gateway.ensure_connected():
+            return None
+        self.logger.info("Manual symbol rescan requested", symbol=symbol, phase="system", reason="operator action")
+        with self._scan_lock:
+            result = self._scan_symbol(symbol)
+        self._store_symbol_result(result)
+        return result
+
     def _run_cycle(self):
         results = []
         cycle_started_at = time.time()
-        for symbol in self.config.scanner.symbols:
-            try:
-                result = self.scan_service.scan_symbol(symbol)
-            except Exception as exc:
-                self.logger.error("Symbol scan failed", symbol=symbol, phase="system", reason=str(exc))
-                result = {
-                    "symbol": symbol,
-                    "status": "error",
-                    "message": str(exc),
-                    "scanned_at": time.time(),
-                    "current_price": None,
-                    "timeframe": "-",
-                    "bias": "-",
-                    "last_rejection": self.state_manager.last_rejection_for_symbol(symbol),
-                }
-            results.append(result)
-            with self._lock:
-                self._symbol_states[symbol] = dict(result)
+        with self._scan_lock:
+            for symbol in self.config.scanner.symbols:
+                result = self._scan_symbol(symbol)
+                results.append(result)
+                self._store_symbol_result(result)
 
         cycle_finished_at = time.time()
         summary = {
@@ -142,9 +274,9 @@ class ScannerEngine:
             }
             symbols = [dict(self._symbol_states[symbol]) for symbol in self.config.scanner.symbols]
 
-        watches = self.state_manager.list_active_watches(statuses=("armed", "confirmed", "cooldown"))
-        alerts = self.state_manager.recent_alerts(limit=20)
-        logs = self.logger.recent_entries(limit=100)
+        watches = self.state_manager.list_active_watches(statuses=("armed", "waiting_mss"))
+        alerts = self.state_manager.recent_alerts(limit=50)
+        logs = self.logger.recent_entries(limit=200)
 
         return {
             "app": self.config.app,
@@ -154,7 +286,7 @@ class ScannerEngine:
                 "telegram": self.notifier.status_snapshot(),
             },
             "metrics": {
-                "active_watches": sum(1 for item in watches if item.get("status") == "armed"),
+                "active_watches": sum(1 for item in watches if item.get("status") in {"armed", "waiting_mss"}),
                 "confirmed_signals_today": self.state_manager.confirmed_signals_today(),
                 "total_symbols": len(self.config.scanner.symbols),
                 "scanned_symbols": sum(1 for item in symbols if item.get("scanned_at")),

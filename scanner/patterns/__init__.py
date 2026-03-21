@@ -1,6 +1,6 @@
 from .fvg import find_fvg_candidates, find_fvgs
 from .ifvg import find_first_touch_after_creation, find_ifvg_candidates, find_ifvg_zone, is_clean_ifvg_inversion
-from .ob import find_ob_candidates, find_order_blocks
+from .ob import find_ob_candidates, find_order_blocks, is_bearish_engulfing, is_bullish_engulfing
 from .swings import (
     build_swing_structure,
     find_swing_highs,
@@ -29,6 +29,8 @@ __all__ = [
     "find_ifvg_zone",
     "find_ob_candidates",
     "find_order_blocks",
+    "is_bearish_engulfing",
+    "is_bullish_engulfing",
     "find_swing_highs",
     "find_swing_lows",
     "get_last_confirmed_swing_high_before",

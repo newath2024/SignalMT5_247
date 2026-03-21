@@ -24,6 +24,7 @@ class ScannerConfig:
     htf_timeframes: list[str]
     ltf_timeframes: list[str]
     loop_interval_sec: int
+    ob_fvg_mode: str
     strict_ifvg: bool
     entry_model: str
     sl_model: str
@@ -94,6 +95,7 @@ def _normalize_config(raw: dict[str, Any]) -> AppConfig:
     entry_model = str(scanner.get("entry_model", "ifvg_first_edge"))
     sl_model = str(scanner.get("sl_model", "origin_candle_extreme"))
     strict_ifvg = bool(scanner.get("strict_ifvg", True))
+    ob_fvg_mode = str(scanner.get("ob_fvg_mode", "medium")).strip().lower()
     htf_timeframes = [str(item) for item in scanner.get("htf_timeframes", ["H1", "H4"])]
     ltf_timeframes = [str(item) for item in scanner.get("ltf_timeframes", ["M3", "M5", "M15"])]
     if entry_model != "ifvg_first_edge":
@@ -106,6 +108,8 @@ def _normalize_config(raw: dict[str, Any]) -> AppConfig:
         raise ValueError("Only H1 and H4 are supported for HTF scanning.")
     if any(item not in {"M3", "M5", "M15"} for item in ltf_timeframes):
         raise ValueError("Only M3, M5, and M15 are supported for LTF scanning.")
+    if ob_fvg_mode not in {"strict", "medium"}:
+        raise ValueError("Only 'strict' and 'medium' are supported for scanner.ob_fvg_mode.")
 
     return AppConfig(
         app=AppMeta(
@@ -121,6 +125,7 @@ def _normalize_config(raw: dict[str, Any]) -> AppConfig:
             htf_timeframes=htf_timeframes,
             ltf_timeframes=ltf_timeframes,
             loop_interval_sec=max(5, int(scanner.get("loop_interval_sec", 60))),
+            ob_fvg_mode=ob_fvg_mode,
             strict_ifvg=strict_ifvg,
             entry_model=entry_model,
             sl_model=sl_model,
@@ -161,3 +166,11 @@ def load_app_config() -> AppConfig:
             f"Expected {CONFIG_SCHEMA_VERSION}."
         )
     return config
+
+
+def save_user_config_patch(patch: dict[str, Any]) -> dict[str, Any]:
+    ensure_runtime_layout()
+    current_payload = _load_json_file(USER_CONFIG_FILE)
+    merged = _deep_merge(current_payload, patch)
+    USER_CONFIG_FILE.write_text(json.dumps(merged, ensure_ascii=True, indent=2), encoding="utf-8")
+    return merged
