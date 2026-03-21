@@ -1,22 +1,17 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+set "APP_HOME=%LOCALAPPDATA%\OpenClaw"
+set "STATE_FILE=%APP_HOME%\data\runtime_state.json"
+set "DB_FILE=%APP_HOME%\data\history.db"
 
-set "ROOT_WATCH=%~dp0watch_cache.json"
-set "ROOT_ALERT=%~dp0alert_cache.json"
-set "DIST_WATCH=%~dp0dist\watch_cache.json"
-set "DIST_ALERT=%~dp0dist\alert_cache.json"
-
-echo Resetting scanner state...
+echo Resetting OpenClaw runtime state...
 echo.
 
-call :delete_if_exists "%ROOT_WATCH%"
-call :delete_if_exists "%ROOT_ALERT%"
-call :delete_if_exists "%DIST_WATCH%"
-call :delete_if_exists "%DIST_ALERT%"
+call :delete_if_exists "%STATE_FILE%"
+call :delete_if_exists "%DB_FILE%"
 
 echo.
-echo Done. Watch and alert caches were cleared.
+echo Done. Config and logs were kept.
 pause
 exit /b 0
 

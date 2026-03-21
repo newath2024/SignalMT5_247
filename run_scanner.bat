@@ -11,7 +11,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist "%~dp0dist\OpenClawScanner.exe" (
+if not exist "%~dp0dist\OpenClawScanner\OpenClawScanner.exe" (
   echo.
   echo EXE not found after build.
   pause
@@ -20,4 +20,4 @@ if not exist "%~dp0dist\OpenClawScanner.exe" (
 
 echo.
 echo Launching scanner...
-start "" "%~dp0dist\OpenClawScanner.exe"
+start "" "%~dp0dist\OpenClawScanner\OpenClawScanner.exe"

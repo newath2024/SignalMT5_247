@@ -1,17 +1,50 @@
 $ErrorActionPreference = "Stop"
 
-$python = "C:\Users\Admin\AppData\Local\Programs\Python\Python312\python.exe"
+$python = (& py -3.12 -c "import sys; print(sys.executable)").Trim()
+$specFile = Join-Path $PSScriptRoot "OpenClawScanner.spec"
+$envFile = Join-Path $PSScriptRoot ".env"
+$notesFile = Join-Path $PSScriptRoot "PORTABLE_SETUP.txt"
+$iconFile = Join-Path $PSScriptRoot "assets\openclaw.ico"
+$iconPngFile = Join-Path $PSScriptRoot "assets\openclaw_icon.png"
+$distDir = Join-Path $PSScriptRoot "dist\OpenClawScanner"
+$resetScript = Join-Path $distDir "ResetScannerState.bat"
 
-& $python -m pip install --upgrade pyinstaller
-& $python -m PyInstaller `
-  --noconfirm `
-  --clean `
-  --onefile `
-  --name OpenClawScanner `
-  --hidden-import MetaTrader5 `
-  --hidden-import matplotlib.backends.backend_agg `
-  main.py
+Get-ChildItem -Path $PSScriptRoot -Recurse -Directory -Filter "__pycache__" -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+Get-ChildItem -Path $PSScriptRoot -Recurse -File -Filter "*.pyc" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 
-if (Test-Path ".env") {
-  Copy-Item ".env" "dist\\.env" -Force
+& $python -m pip install --upgrade pyinstaller PySide6
+& $python -m PyInstaller --noconfirm --clean $specFile
+
+if (-not (Test-Path $distDir)) {
+  throw "Portable output folder was not created: $distDir"
 }
+
+if (Test-Path $envFile) {
+  Copy-Item $envFile (Join-Path $distDir ".env") -Force
+}
+
+if (Test-Path $notesFile) {
+  Copy-Item $notesFile (Join-Path $distDir "PORTABLE_SETUP.txt") -Force
+}
+
+if (Test-Path $iconFile) {
+  Copy-Item $iconFile (Join-Path $distDir "openclaw.ico") -Force
+}
+
+if (Test-Path $iconPngFile) {
+  Copy-Item $iconPngFile (Join-Path $distDir "openclaw_icon.png") -Force
+}
+
+@'
+@echo off
+setlocal
+set "APP_HOME=%LOCALAPPDATA%\OpenClaw"
+set "STATE_FILE=%APP_HOME%\data\runtime_state.json"
+set "DB_FILE=%APP_HOME%\data\history.db"
+
+echo Resetting OpenClaw runtime state...
+if exist "%STATE_FILE%" del /f /q "%STATE_FILE%"
+if exist "%DB_FILE%" del /f /q "%DB_FILE%"
+echo Done. Config and logs were kept.
+pause
+'@ | Set-Content -Path $resetScript -Encoding ASCII

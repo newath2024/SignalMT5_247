@@ -9,5 +9,5 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo Build complete. EXE is in dist\OpenClawScanner.exe
+echo Build complete. Portable app is in dist\OpenClawScanner\OpenClawScanner.exe
 pause
