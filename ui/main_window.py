@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 
 
@@ -41,11 +42,15 @@ def launch_desktop(controller, auto_start: bool = True):
     from core.constants import APP_NAME
     from core.paths import BUNDLE_ROOT
     from ui.presentation import (
+        format_duration,
         format_cooldown,
+        format_relative_age,
         format_phase,
         format_price,
         format_score,
         format_short_time,
+        get_scanner_status_meta,
+        get_state_label,
         format_timestamp,
         format_zone,
         is_recent,
@@ -82,6 +87,7 @@ def launch_desktop(controller, auto_start: bool = True):
             self.auto_start = auto_start
             self._symbol_rows = []
             self._last_snapshot = None
+            self._pulse_on = False
 
             self.setWindowTitle(f"{controller.config.app.name} Control Center")
             self.resize(1540, 960)
@@ -143,8 +149,14 @@ def launch_desktop(controller, auto_start: bool = True):
                 """
             )
 
-            self.status_label = QLabel("Idle")
-            self.status_label.setStyleSheet("font-size: 13px; color: #334155;")
+            self.activity_indicator = QLabel()
+            self.activity_indicator.setFixedSize(12, 12)
+            self.status_label = QLabel("Scanner: IDLE")
+            self.status_label.setStyleSheet("font-size: 13px; font-weight: 700; color: #334155;")
+            self.scan_progress_label = QLabel("Awaiting first scan cycle.")
+            self.scan_progress_label.setStyleSheet("font-size: 12px; color: #64748b;")
+            self.last_scan_label = QLabel("Last scan: -")
+            self.last_scan_label.setStyleSheet("font-size: 12px; color: #64748b;")
             self.mt5_label = QLabel("MT5: checking")
             self.telegram_label = QLabel("Telegram: checking")
 
@@ -183,9 +195,12 @@ def launch_desktop(controller, auto_start: bool = True):
             self._build_ui()
             self._wire_events()
 
-            self._timer = QTimer(self)
-            self._timer.timeout.connect(self.refresh_snapshot)
-            self._timer.start(2000)
+            self._snapshot_timer = QTimer(self)
+            self._snapshot_timer.timeout.connect(self.refresh_snapshot)
+            self._snapshot_timer.start(1500)
+            self._heartbeat_timer = QTimer(self)
+            self._heartbeat_timer.timeout.connect(self._tick_status_feedback)
+            self._heartbeat_timer.start(1000)
             self.refresh_snapshot()
 
             if self.auto_start:
@@ -225,7 +240,21 @@ def launch_desktop(controller, auto_start: bool = True):
             header_layout.addLayout(top_row)
 
             control_row = QHBoxLayout()
-            control_row.addWidget(self.status_label, 1)
+            status_box = QVBoxLayout()
+            status_box.setSpacing(2)
+            status_top_row = QHBoxLayout()
+            status_top_row.setSpacing(8)
+            status_top_row.addWidget(self.activity_indicator, 0, Qt.AlignVCenter)
+            status_top_row.addWidget(self.status_label, 1)
+            status_top_row.addStretch(1)
+            status_bottom_row = QHBoxLayout()
+            status_bottom_row.setSpacing(12)
+            status_bottom_row.addWidget(self.scan_progress_label)
+            status_bottom_row.addWidget(self.last_scan_label)
+            status_bottom_row.addStretch(1)
+            status_box.addLayout(status_top_row)
+            status_box.addLayout(status_bottom_row)
+            control_row.addLayout(status_box, 1)
             control_row.addWidget(self.mt5_label)
             control_row.addWidget(self.telegram_label)
             control_row.addSpacing(12)
@@ -449,9 +478,6 @@ def launch_desktop(controller, auto_start: bool = True):
             strategy = snapshot.get("strategy", {})
             current_ob_fvg_mode = str(strategy.get("ob_fvg_mode", "medium"))
 
-            self.status_label.setText(
-                f"Scanner: {scanner['status'].upper()} | interval {scanner['interval_sec']}s | OB FVG {current_ob_fvg_mode}"
-            )
             self.mt5_label.setText(
                 f"MT5: {'connected' if connections['mt5']['connected'] else 'disconnected'}"
             )
@@ -485,6 +511,82 @@ def launch_desktop(controller, auto_start: bool = True):
             self._fill_alert_table(snapshot["alerts"])
             self.refresh_activity_log()
             self.update_symbol_inspector()
+            self._render_status_feedback()
+
+        def _tick_status_feedback(self):
+            self._pulse_on = not self._pulse_on
+            self._render_status_feedback()
+
+        def _render_status_feedback(self):
+            snapshot = self._last_snapshot
+            if not snapshot:
+                return
+
+            scanner = snapshot["scanner"]
+            metrics = snapshot["metrics"]
+            strategy = snapshot.get("strategy", {})
+            status = str(scanner.get("status") or "idle").lower()
+            pulse = bool(scanner.get("running")) and status in {"running", "scanning", "starting"}
+            meta = get_scanner_status_meta(status, pulse=self._pulse_on and pulse)
+            self.activity_indicator.setStyleSheet(
+                f"background: {meta['dot']}; border-radius: 6px; border: 1px solid rgba(15, 23, 42, 0.10);"
+            )
+            self.status_label.setText(self._build_status_headline(scanner))
+            self.scan_progress_label.setText(self._build_scan_progress_text(scanner, metrics, strategy))
+            self.last_scan_label.setText(self._build_last_scan_text(scanner))
+
+        @staticmethod
+        def _build_status_headline(scanner: dict) -> str:
+            status = str(scanner.get("status") or "idle").lower()
+            meta = get_scanner_status_meta(status)
+            progress = dict(scanner.get("progress") or {})
+            if status == "scanning":
+                total = max(0, int(progress.get("total") or 0))
+                current = max(1, int(progress.get("current") or 0)) if total else int(progress.get("current") or 0)
+                if total:
+                    return f"Scanner: {meta['label']} ({current}/{total} symbols)"
+                return f"Scanner: {meta['label']}"
+            if status == "running":
+                next_scan_at = scanner.get("next_scan_at")
+                if next_scan_at is not None:
+                    remaining = max(0, int(next_scan_at - time.time()))
+                    return f"Scanner: {meta['label']} (next scan in {format_duration(remaining)})"
+            return f"Scanner: {meta['label']}"
+
+        @staticmethod
+        def _build_scan_progress_text(scanner: dict, metrics: dict, strategy: dict) -> str:
+            progress = dict(scanner.get("progress") or {})
+            status = str(scanner.get("status") or "idle").lower()
+            pieces = []
+            if status == "scanning":
+                total = max(0, int(progress.get("total") or 0))
+                current = max(1, int(progress.get("current") or 0)) if total else int(progress.get("current") or 0)
+                if total:
+                    pieces.append(f"Scanning {current}/{total} symbols...")
+                current_symbol = progress.get("current_symbol")
+                if current_symbol:
+                    pieces.append(f"Current symbol {current_symbol}")
+            else:
+                scanned_symbols = int(metrics.get("scanned_symbols") or 0)
+                total_symbols = int(metrics.get("total_symbols") or 0)
+                if total_symbols:
+                    pieces.append(f"Coverage {scanned_symbols}/{total_symbols}")
+            pieces.append(f"Interval {scanner.get('interval_sec', 0)}s")
+            pieces.append(f"OB FVG {strategy.get('ob_fvg_mode', 'medium')}")
+            if status == "error" and scanner.get("last_error"):
+                pieces.append(f"Error: {scanner['last_error']}")
+            return " | ".join(piece for piece in pieces if piece)
+
+        @staticmethod
+        def _build_last_scan_text(scanner: dict) -> str:
+            last_cycle = dict(scanner.get("last_cycle") or {})
+            finished_at = last_cycle.get("finished_at")
+            if finished_at:
+                return f"Last scan: {format_short_time(finished_at)} ({format_relative_age(finished_at)})"
+            progress = dict(scanner.get("progress") or {})
+            if progress.get("active") and progress.get("started_at"):
+                return f"Current cycle: started {format_short_time(progress['started_at'])} ({format_relative_age(progress['started_at'])})"
+            return "Last scan: waiting for first cycle"
 
         def _fill_symbol_table(self, rows: list[dict]):
             selected_symbol = self._selected_symbol()
@@ -495,7 +597,7 @@ def launch_desktop(controller, auto_start: bool = True):
             for row_index, item in enumerate(rows):
                 values = [
                     item.get("symbol", "-"),
-                    item.get("state", "-"),
+                    get_state_label(item.get("state")),
                     format_price(item.get("price")),
                     item.get("bias", "neutral"),
                     item.get("tf", "-"),
@@ -538,7 +640,7 @@ def launch_desktop(controller, auto_start: bool = True):
                     item.get("direction") or ("LONG" if item.get("bias") == "Long" else "SHORT" if item.get("bias") == "Short" else "-"),
                     item.get("htf_context", "-"),
                     item.get("ltf_sweep_status", "-"),
-                    item.get("status", "-"),
+                    get_state_label(item.get("status")),
                     item.get("waiting_for", "-"),
                     format_zone(item.get("zone_top"), item.get("zone_bottom")),
                     format_short_time(item.get("armed_at")),
@@ -605,6 +707,8 @@ def launch_desktop(controller, auto_start: bool = True):
                 value = detail.get(key, "-")
                 if key in {"last_alert_time"}:
                     value = format_timestamp(value)
+                elif key == "current_state":
+                    value = get_state_label(value)
                 label.setText(str(value or "-"))
 
         @staticmethod

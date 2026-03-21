@@ -23,6 +23,7 @@ class ScannerEngine:
         self._last_cycle = None
         self._last_error = None
         self._interval_sec = config.scanner.loop_interval_sec
+        self._cycle_progress = self._empty_cycle_progress()
         persisted = {
             item["symbol"]: item
             for item in self.state_manager.list_symbol_states(config.scanner.symbols)
@@ -30,6 +31,19 @@ class ScannerEngine:
         self._symbol_states = {
             symbol: self._hydrate_symbol_state(symbol, persisted.get(symbol))
             for symbol in config.scanner.symbols
+        }
+
+    @staticmethod
+    def _empty_cycle_progress() -> dict:
+        return {
+            "active": False,
+            "current": 0,
+            "completed": 0,
+            "total": 0,
+            "current_symbol": None,
+            "started_at": None,
+            "finished_at": None,
+            "updated_at": None,
         }
 
     @staticmethod
@@ -125,6 +139,7 @@ class ScannerEngine:
             self._status = "starting"
             self._started_at = time.time()
             self._last_error = None
+            self._cycle_progress = self._empty_cycle_progress()
             self._thread.start()
         return True, "Scanner started."
 
@@ -133,6 +148,7 @@ class ScannerEngine:
         with self._lock:
             if self._thread is None or not self._thread.is_alive():
                 self._status = "stopped"
+                self._cycle_progress = self._empty_cycle_progress()
                 return False, "Scanner is not running."
             self._status = "stopping"
             self._stop_event.set()
@@ -142,6 +158,7 @@ class ScannerEngine:
         with self._lock:
             if self._thread is None or not self._thread.is_alive():
                 self._status = "stopped"
+                self._cycle_progress = self._empty_cycle_progress()
         return True, "Scanner stopping."
 
     def _scan_symbol(self, symbol: str) -> dict:
@@ -193,6 +210,34 @@ class ScannerEngine:
         with self._lock:
             self._symbol_states[result["symbol"]] = dict(result)
 
+    def _set_cycle_progress(
+        self,
+        *,
+        active: bool,
+        total: int,
+        current: int = 0,
+        completed: int = 0,
+        current_symbol: str | None = None,
+        started_at: float | None = None,
+        finished_at: float | None = None,
+    ):
+        now = time.time()
+        with self._lock:
+            progress = dict(self._cycle_progress)
+            progress.update(
+                {
+                    "active": active,
+                    "total": max(0, int(total)),
+                    "current": max(0, int(current)),
+                    "completed": max(0, int(completed)),
+                    "current_symbol": current_symbol,
+                    "started_at": started_at if started_at is not None else progress.get("started_at"),
+                    "finished_at": finished_at,
+                    "updated_at": now,
+                }
+            )
+            self._cycle_progress = progress
+
     def run_once(self):
         if not self.data_gateway.ensure_connected():
             return []
@@ -210,19 +255,76 @@ class ScannerEngine:
         if not self.data_gateway.ensure_connected():
             return None
         self.logger.info("Manual symbol rescan requested", symbol=symbol, phase="system", reason="operator action")
+        scan_started_at = time.time()
+        self._set_cycle_progress(
+            active=True,
+            total=1,
+            current=1,
+            completed=0,
+            current_symbol=symbol,
+            started_at=scan_started_at,
+        )
+        with self._lock:
+            self._status = "scanning"
         with self._scan_lock:
             result = self._scan_symbol(symbol)
         self._store_symbol_result(result)
+        scan_finished_at = time.time()
+        self._set_cycle_progress(
+            active=False,
+            total=1,
+            current=1,
+            completed=1,
+            current_symbol=None,
+            started_at=scan_started_at,
+            finished_at=scan_finished_at,
+        )
+        with self._lock:
+            self._last_cycle = {
+                "started_at": scan_started_at,
+                "finished_at": scan_finished_at,
+                "duration_sec": max(0.0, scan_finished_at - scan_started_at),
+                "symbol_count": 1,
+                "alerts_today": self.state_manager.confirmed_signals_today(),
+            }
+            self._status = "running" if self._thread is not None and self._thread.is_alive() else "idle"
         return result
 
     def _run_cycle(self):
         results = []
         cycle_started_at = time.time()
+        total_symbols = len(self.config.scanner.symbols)
+        self._set_cycle_progress(
+            active=True,
+            total=total_symbols,
+            current=0,
+            completed=0,
+            current_symbol=None,
+            started_at=cycle_started_at,
+        )
+        with self._lock:
+            self._status = "scanning"
         with self._scan_lock:
-            for symbol in self.config.scanner.symbols:
+            for index, symbol in enumerate(self.config.scanner.symbols, start=1):
+                self._set_cycle_progress(
+                    active=True,
+                    total=total_symbols,
+                    current=index,
+                    completed=index - 1,
+                    current_symbol=symbol,
+                    started_at=cycle_started_at,
+                )
                 result = self._scan_symbol(symbol)
                 results.append(result)
                 self._store_symbol_result(result)
+                self._set_cycle_progress(
+                    active=True,
+                    total=total_symbols,
+                    current=index,
+                    completed=index,
+                    current_symbol=symbol,
+                    started_at=cycle_started_at,
+                )
 
         cycle_finished_at = time.time()
         summary = {
@@ -232,9 +334,18 @@ class ScannerEngine:
             "symbol_count": len(results),
             "alerts_today": self.state_manager.confirmed_signals_today(),
         }
+        self._set_cycle_progress(
+            active=False,
+            total=total_symbols,
+            current=total_symbols,
+            completed=len(results),
+            current_symbol=None,
+            started_at=cycle_started_at,
+            finished_at=cycle_finished_at,
+        )
         with self._lock:
             self._last_cycle = summary
-            self._status = "running"
+            self._status = "running" if self._thread is not None and self._thread.is_alive() else "idle"
         return results
 
     def _runner(self):
@@ -258,12 +369,19 @@ class ScannerEngine:
             self.data_gateway.disconnect()
             with self._lock:
                 self._thread = None
+                if self._status != "error":
+                    self._cycle_progress = self._empty_cycle_progress()
                 if self._status not in ("error", "stopped"):
                     self._status = "idle"
 
     def snapshot(self) -> dict:
         with self._lock:
-            running = self._thread is not None and self._thread.is_alive()
+            thread_running = self._thread is not None and self._thread.is_alive()
+            progress = dict(self._cycle_progress)
+            running = thread_running or bool(progress.get("active"))
+            next_scan_at = None
+            if thread_running and self._last_cycle and not progress.get("active"):
+                next_scan_at = self._last_cycle["finished_at"] + self._interval_sec
             scanner = {
                 "running": running,
                 "status": self._status,
@@ -271,6 +389,8 @@ class ScannerEngine:
                 "started_at": self._started_at,
                 "last_cycle": dict(self._last_cycle) if self._last_cycle else None,
                 "last_error": self._last_error,
+                "next_scan_at": next_scan_at,
+                "progress": progress,
             }
             symbols = [dict(self._symbol_states[symbol]) for symbol in self.config.scanner.symbols]
 
