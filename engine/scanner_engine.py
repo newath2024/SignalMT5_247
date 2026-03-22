@@ -6,13 +6,14 @@ from strategy.reason_engine import describe_error
 
 
 class ScannerEngine:
-    def __init__(self, config, data_gateway, notifier, state_manager, scan_service, logger):
+    def __init__(self, config, data_gateway, notifier, state_manager, scan_service, logger, runtime_state=None):
         self.config = config
         self.data_gateway = data_gateway
         self.notifier = notifier
         self.state_manager = state_manager
         self.scan_service = scan_service
         self.logger = logger
+        self.runtime_state = runtime_state
 
         self._lock = threading.RLock()
         self._scan_lock = threading.RLock()
@@ -32,6 +33,8 @@ class ScannerEngine:
             symbol: self._hydrate_symbol_state(symbol, persisted.get(symbol))
             for symbol in config.scanner.symbols
         }
+        if self.runtime_state is not None:
+            self.runtime_state.seed_symbol_states(list(self._symbol_states.values()))
 
     @staticmethod
     def _empty_cycle_progress() -> dict:
@@ -209,6 +212,8 @@ class ScannerEngine:
     def _store_symbol_result(self, result: dict):
         with self._lock:
             self._symbol_states[result["symbol"]] = dict(result)
+        if self.runtime_state is not None:
+            self.runtime_state.update_symbol_state(result)
 
     def _set_cycle_progress(
         self,

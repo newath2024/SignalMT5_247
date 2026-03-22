@@ -14,6 +14,7 @@
       "BTCUSD",
       "ETHUSD"
     ],
+    "symbol_aliases": {},
     "loop_interval_sec": 60,
     "ob_fvg_mode": "medium",
     "alert_mode": "both"

@@ -16,22 +16,22 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     controller = AppController()
+    try:
+        if args.interval:
+            controller.set_interval(args.interval)
 
-    if args.interval:
-        controller.set_interval(args.interval)
-
-    if args.headless or args.once:
-        if args.once:
-            controller.run_once()
-            return 0
-        controller.start()
-        try:
+        if args.headless or args.once:
+            if args.once:
+                controller.run_once()
+                return 0
+            controller.start()
             while True:
                 time.sleep(1)
-        except KeyboardInterrupt:
-            controller.stop()
-            return 0
 
-    from ui import launch_desktop
+        from ui import launch_desktop
 
-    return launch_desktop(controller, auto_start=not args.no_autostart)
+        return launch_desktop(controller, auto_start=not args.no_autostart)
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        controller.shutdown()

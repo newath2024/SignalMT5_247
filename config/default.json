@@ -21,6 +21,7 @@
       "BTCUSD",
       "ETHUSD"
     ],
+    "symbol_aliases": {},
     "htf_timeframes": [
       "H1",
       "H4"

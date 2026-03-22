@@ -31,14 +31,25 @@ class TelegramNotifier:
             "missing_fields": self.missing_fields(),
         }
 
-    def _send_message(self, text: str):
+    def _send_message(self, text: str, chat_id: str | None = None):
         url = f"https://api.telegram.org/bot{self.config.bot_token}/sendMessage"
         response = requests.post(
             url,
-            data={"chat_id": self.config.chat_id, "text": text},
+            data={"chat_id": chat_id or self.config.chat_id, "text": text},
             timeout=15,
         )
         response.raise_for_status()
+
+    def send_text(self, text: str, chat_id: str | None = None) -> tuple[bool, str | None]:
+        if not self.config.enabled:
+            return False, "telegram disabled"
+        if not self.is_configured():
+            return False, f"missing {', '.join(self.missing_fields())}"
+        try:
+            self._send_message(text, chat_id=chat_id)
+            return True, None
+        except requests.RequestException as exc:
+            return False, str(exc)
 
     def send_watch_armed(self, watch: dict) -> tuple[bool, str | None]:
         if not self.config.enabled:
