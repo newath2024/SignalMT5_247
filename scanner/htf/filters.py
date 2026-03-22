@@ -6,6 +6,8 @@ from ..config.htf import (
     HTF_DISTANCE_BODY_THRESHOLD,
     HTF_DISTANCE_NEAR_THRESHOLD,
     HTF_EVALUATION_RECENT_BARS,
+    HTF_FVG_INVALIDATION_BUFFER,
+    HTF_FVG_INVALIDATION_USE_CLOSE,
     HTF_OB_INVALIDATION_BUFFER,
     HTF_OB_INVALIDATION_USE_CLOSE,
     HTF_REACTION_NEAR,
@@ -47,11 +49,11 @@ def determine_htf_structure(snapshot):
     }
 
 
-def is_ob_valid(ob_zone, rates, current_index) -> bool:
-    if ob_zone is None or rates is None or len(rates) == 0:
+def _is_directional_zone_valid(zone, rates, current_index, *, use_close: bool, buffer: float) -> bool:
+    if zone is None or rates is None or len(rates) == 0:
         return False
 
-    source_index = ob_zone.get("source_index")
+    source_index = zone.get("source_index")
     if source_index is None:
         return True
 
@@ -60,14 +62,13 @@ def is_ob_valid(ob_zone, rates, current_index) -> bool:
     if start_index > last_index:
         return True
 
-    low = float(ob_zone["low"])
-    high = float(ob_zone["high"])
-    bias = ob_zone.get("bias")
-    buffer = float(HTF_OB_INVALIDATION_BUFFER or 0.0)
+    low = float(zone["low"])
+    high = float(zone["high"])
+    bias = zone.get("bias")
 
     for index in range(start_index, last_index + 1):
         candle = rates[index]
-        if HTF_OB_INVALIDATION_USE_CLOSE:
+        if use_close:
             value = float(candle["close"])
             if bias == "Long" and value < low - buffer:
                 return False
@@ -83,6 +84,43 @@ def is_ob_valid(ob_zone, rates, current_index) -> bool:
     return True
 
 
+def is_ob_valid(ob_zone, rates, current_index) -> bool:
+    return _is_directional_zone_valid(
+        ob_zone,
+        rates,
+        current_index,
+        use_close=bool(HTF_OB_INVALIDATION_USE_CLOSE),
+        buffer=float(HTF_OB_INVALIDATION_BUFFER or 0.0),
+    )
+
+
+def is_fvg_valid(fvg_zone, rates, current_index) -> bool:
+    return _is_directional_zone_valid(
+        fvg_zone,
+        rates,
+        current_index,
+        use_close=bool(HTF_FVG_INVALIDATION_USE_CLOSE),
+        buffer=float(HTF_FVG_INVALIDATION_BUFFER or 0.0),
+    )
+
+
+def _zone_invalidation_status(zone, rates, current_index) -> tuple[bool, str | None]:
+    zone_type = str(zone.get("type") or "").upper()
+    if zone_type == "OB":
+        valid = is_ob_valid(zone, rates, current_index)
+        reason = None if valid else (
+            "OB invalidated by close break" if HTF_OB_INVALIDATION_USE_CLOSE else "OB invalidated by wick break"
+        )
+        return valid, reason
+    if zone_type == "FVG":
+        valid = is_fvg_valid(zone, rates, current_index)
+        reason = None if valid else (
+            "FVG invalidated by close break" if HTF_FVG_INVALIDATION_USE_CLOSE else "FVG invalidated by wick break"
+        )
+        return valid, reason
+    return True, None
+
+
 def evaluate_htf_zone(zone, snapshot, structure=None):
     price = snapshot["current_price"]
     point = snapshot["point"]
@@ -91,12 +129,7 @@ def evaluate_htf_zone(zone, snapshot, structure=None):
     avg_h1 = average_range(rates_h1, 20)
     structure = structure or determine_htf_structure(snapshot)
     zone_rates = rates_h4 if zone["timeframe"] == "H4" else rates_h1
-    zone_valid = True
-    invalidation_reason = None
-    if zone.get("type") == "OB":
-        zone_valid = is_ob_valid(zone, zone_rates, len(zone_rates) - 1)
-        if not zone_valid:
-            invalidation_reason = "OB invalidated by close break"
+    zone_valid, invalidation_reason = _zone_invalidation_status(zone, zone_rates, len(zone_rates) - 1)
 
     if not zone_valid:
         return {

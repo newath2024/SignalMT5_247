@@ -8,7 +8,7 @@ from ..config.htf import (
 )
 from ..patterns.fvg import find_fvgs as detect_fvgs
 from ..patterns.ob import find_order_blocks as detect_order_blocks
-from .filters import is_ob_valid
+from .filters import is_fvg_valid, is_ob_valid
 from ..utils import average_range, clamp
 
 
@@ -36,7 +36,9 @@ def find_order_blocks(rates, timeframe_name, avg_range, point):
 
 
 def find_fvgs(rates, timeframe_name, avg_range, point=0.0):
-    return detect_fvgs(rates, timeframe_name, avg_range, point, zone_builder=make_zone)
+    zones = detect_fvgs(rates, timeframe_name, avg_range, point, zone_builder=make_zone)
+    # Drop invalidated FVG zones before they reach HTF context or downstream LTF flow.
+    return [zone for zone in zones if is_fvg_valid(zone, rates, len(rates) - 1)]
 
 
 def build_previous_levels(rates_d1, rates_w1, band):
