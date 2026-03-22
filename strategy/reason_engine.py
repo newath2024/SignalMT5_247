@@ -47,6 +47,16 @@ def _context_market_bias(context: dict[str, Any] | None) -> str | None:
     return None
 
 
+def _context_priority(context: dict[str, Any] | None) -> tuple[int, int, float]:
+    directional = _context_market_bias(context) in {"Long", "Short"}
+    structural = not _is_liquidity_context(context)
+    return (
+        1 if directional else 0,
+        1 if structural else 0,
+        _context_score(context),
+    )
+
+
 def _humanize_liquidity_state(state: str | None) -> str:
     if state == "swept_and_reclaimed":
         return "Sweep + reclaim"
@@ -63,9 +73,9 @@ def derive_htf_bias(contexts: dict[str, Any]) -> tuple[str, dict[str, Any] | Non
     candidates = [item for item in contexts.values() if item is not None]
     if not candidates:
         return "neutral", None
-    primary = max(candidates, key=_context_score)
+    primary = max(candidates, key=_context_priority)
     directional_candidates = [item for item in candidates if _context_market_bias(item) in {"Long", "Short"}]
-    bias_source = max(directional_candidates, key=_context_score) if directional_candidates else primary
+    bias_source = max(directional_candidates, key=_context_priority) if directional_candidates else primary
     return bias_label(_context_market_bias(bias_source)), primary
 
 

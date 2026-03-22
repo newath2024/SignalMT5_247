@@ -3,8 +3,9 @@ from __future__ import annotations
 from ..config.htf import (
     HTF_BOS_CLOSE_BUFFER_POINTS,
     HTF_COMPOSITE_DISTANCE_WEIGHT,
-    HTF_DISTANCE_NEAR_THRESHOLD,
+    HTF_LIQUIDITY_DIRECTIONAL_SCORE_PENALTY,
     HTF_LIQUIDITY_CONFIRMATION_BARS,
+    HTF_LIQUIDITY_NEUTRAL_SCORE_PENALTY,
     HTF_LIQUIDITY_RECENT_BARS,
     HTF_REACTION_NEAR,
     HTF_REACTION_NEAR_WITH_BODY,
@@ -280,7 +281,8 @@ def evaluate_liquidity_level(zone, snapshot, structure=None):
     distance_score = clamp(1.0 - abs(price - level) / max(tolerance, point))
     trend = (structure or {}).get("trend", "Range")
     trend_alignment = _trend_alignment(structure or {}, market_structure_bias)
-    clear = bool(interaction_state != "untouched" or at_level or distance_score >= HTF_DISTANCE_NEAR_THRESHOLD)
+    sweep_active = interaction_state in {"swept", "swept_and_reclaimed"}
+    clear = sweep_active
 
     composite = float(zone.get("quality") or 0.0) + reaction + distance_score * HTF_COMPOSITE_DISTANCE_WEIGHT
     if interaction_state == "swept":
@@ -289,6 +291,9 @@ def evaluate_liquidity_level(zone, snapshot, structure=None):
         composite += 0.08
     if market_structure_bias in {"Long", "Short"}:
         composite += 0.12
+        composite -= HTF_LIQUIDITY_DIRECTIONAL_SCORE_PENALTY
+    else:
+        composite -= HTF_LIQUIDITY_NEUTRAL_SCORE_PENALTY
     if trend_alignment == "aligned":
         composite += 0.05
     elif trend_alignment == "countertrend":
