@@ -21,6 +21,7 @@ class AppMeta:
 @dataclass(frozen=True)
 class ScannerConfig:
     symbols: list[str]
+    symbol_aliases: dict[str, str]
     htf_timeframes: list[str]
     ltf_timeframes: list[str]
     loop_interval_sec: int
@@ -96,8 +97,13 @@ def _normalize_config(raw: dict[str, Any]) -> AppConfig:
     sl_model = str(scanner.get("sl_model", "origin_candle_extreme"))
     strict_ifvg = bool(scanner.get("strict_ifvg", True))
     ob_fvg_mode = str(scanner.get("ob_fvg_mode", "medium")).strip().lower()
+    symbol_aliases_raw = scanner.get("symbol_aliases", {})
     htf_timeframes = [str(item) for item in scanner.get("htf_timeframes", ["H1", "H4"])]
     ltf_timeframes = [str(item) for item in scanner.get("ltf_timeframes", ["M3", "M5", "M15"])]
+    if symbol_aliases_raw is None:
+        symbol_aliases_raw = {}
+    if not isinstance(symbol_aliases_raw, dict):
+        raise ValueError("scanner.symbol_aliases must be a key/value object.")
     if entry_model != "ifvg_first_edge":
         raise ValueError("Only 'ifvg_first_edge' is supported for entry_model in the current strategy.")
     if sl_model != "origin_candle_extreme":
@@ -122,6 +128,7 @@ def _normalize_config(raw: dict[str, Any]) -> AppConfig:
         ),
         scanner=ScannerConfig(
             symbols=[str(item).upper() for item in scanner.get("symbols", [])],
+            symbol_aliases={str(key): str(value).upper() for key, value in symbol_aliases_raw.items()},
             htf_timeframes=htf_timeframes,
             ltf_timeframes=ltf_timeframes,
             loop_interval_sec=max(5, int(scanner.get("loop_interval_sec", 60))),

@@ -551,7 +551,7 @@ def launch_desktop(controller, auto_start: bool = True):
             self.refresh_snapshot()
 
         def closeEvent(self, event):
-            self.controller.stop()
+            self.controller.shutdown()
             super().closeEvent(event)
 
         def refresh_snapshot(self):
