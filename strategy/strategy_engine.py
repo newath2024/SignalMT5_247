@@ -13,7 +13,6 @@ from .reason_engine import (
     describe_waiting_mss_reason,
     describe_watch_reason,
     direction_label,
-    format_bias_display,
     format_context_label,
 )
 
@@ -91,6 +90,13 @@ class StrategyEngine:
     def evaluate_symbol(self, snapshot: dict, active_watches: list[dict]) -> StrategyDecision:
         all_htf_zones, contexts = detect_htf_context(snapshot)
         htf_bias, primary_context = derive_htf_bias(contexts)
+        directional_contexts = [contexts.get("Long"), contexts.get("Short")]
+        directional_contexts = [item for item in directional_contexts if item is not None]
+        best_directional_context = (
+            max(directional_contexts, key=lambda item: float(item.get("score") or 0.0))
+            if directional_contexts
+            else None
+        )
 
         retained_watches = []
         removed_watches = []
@@ -149,7 +155,7 @@ class StrategyEngine:
             if selected_watch is not None
             else format_context_label(primary_context)
         )
-        htf_bias_display = format_bias_display(primary_context, float(snapshot["current_price"]))
+        htf_bias_display = htf_bias
 
         if confirmed_signal is not None:
             state = SetupState.CONFIRMED.value
@@ -191,12 +197,19 @@ class StrategyEngine:
             timeframe = selected_rejection["timeframe"]
             waiting_for = "-"
             active_watch_id = None
-        elif primary_context is not None:
+        elif best_directional_context is not None:
             state = SetupState.CONTEXT_FOUND.value
             phase = SetupPhase.LTF_SWEEP.value
+            reason = describe_context_wait(best_directional_context)
+            timeframe = best_directional_context.get("zone", {}).get("timeframe", "-")
+            waiting_for = "sweep"
+            active_watch_id = None
+        elif primary_context is not None:
+            state = SetupState.CONTEXT_FOUND.value
+            phase = SetupPhase.HTF_CONTEXT.value
             reason = describe_context_wait(primary_context)
             timeframe = primary_context.get("zone", {}).get("timeframe", "-")
-            waiting_for = "sweep"
+            waiting_for = "HTF confirmation"
             active_watch_id = None
         else:
             state = SetupState.IDLE.value

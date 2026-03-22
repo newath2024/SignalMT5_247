@@ -24,23 +24,64 @@ def bias_label(bias: str | None) -> str:
     return "neutral"
 
 
+def _context_score(context: dict[str, Any] | None) -> float:
+    if not context:
+        return 0.0
+    return float(context.get("score") or 0.0)
+
+
+def _is_liquidity_context(context: dict[str, Any] | None) -> bool:
+    zone = (context or {}).get("zone") or {}
+    return bool(zone.get("is_liquidity_level"))
+
+
+def _context_market_bias(context: dict[str, Any] | None) -> str | None:
+    if not context:
+        return None
+    market_bias = context.get("market_structure_bias")
+    if market_bias in {"Long", "Short"}:
+        return str(market_bias)
+    raw_bias = context.get("bias")
+    if raw_bias in {"Long", "Short"}:
+        return str(raw_bias)
+    return None
+
+
+def _humanize_liquidity_state(state: str | None) -> str:
+    if state == "swept_and_reclaimed":
+        return "Sweep + reclaim"
+    if state == "swept":
+        return "Swept"
+    if state == "tapped":
+        return "Tapped"
+    if state == "untouched":
+        return "Untouched"
+    return "-"
+
+
 def derive_htf_bias(contexts: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
     candidates = [item for item in contexts.values() if item is not None]
     if not candidates:
         return "neutral", None
-    primary = max(candidates, key=lambda item: float(item.get("score") or 0.0))
-    return bias_label(primary.get("bias")), primary
+    primary = max(candidates, key=_context_score)
+    directional_candidates = [item for item in candidates if _context_market_bias(item) in {"Long", "Short"}]
+    bias_source = max(directional_candidates, key=_context_score) if directional_candidates else primary
+    return bias_label(_context_market_bias(bias_source)), primary
 
 
 def format_context_label(context: dict[str, Any] | None) -> str:
     if not context:
         return "-"
     zone = context.get("zone") or {}
+    if _is_liquidity_context(context):
+        interaction_label = str(context.get("liquidity_interaction_label") or "").strip()
+        if interaction_label:
+            return interaction_label
     label = str(zone.get("label") or "").strip()
     if label:
         return label
     timeframe = zone.get("timeframe", "-")
-    return f"{timeframe} {bias_label(context.get('bias'))} context"
+    return f"{timeframe} {bias_label(_context_market_bias(context))} context"
 
 
 def _context_location(context: dict[str, Any] | None, current_price: float | None = None) -> str:
@@ -64,13 +105,8 @@ def _context_location(context: dict[str, Any] | None, current_price: float | Non
 
 def format_bias_display(primary_context: dict[str, Any] | None, current_price: float | None = None) -> str:
     if not primary_context:
-        return "neutral (no clear context)"
-    location = _context_location(primary_context, current_price)
-    if location == "inside":
-        return f"{bias_label(primary_context.get('bias'))} (inside {format_context_label(primary_context)})"
-    if location == "near":
-        return f"{bias_label(primary_context.get('bias'))} (near {format_context_label(primary_context)})"
-    return f"{bias_label(primary_context.get('bias'))} ({format_context_label(primary_context)} context)"
+        return "neutral"
+    return bias_label(_context_market_bias(primary_context))
 
 
 def format_context_reason(context: dict[str, Any] | None) -> str:
@@ -82,10 +118,49 @@ def format_context_reason(context: dict[str, Any] | None) -> str:
     reaction = float(context.get("reaction_clarity") or 0.0)
     trend = str(context.get("structure_trend") or "Range")
     alignment = str(context.get("trend_alignment") or "range")
-    return (
+
+    if _is_liquidity_context(context):
+        raw_state = str(context.get("liquidity_interaction_state") or "untouched")
+        state = _humanize_liquidity_state(raw_state)
+        bias = bias_label(_context_market_bias(context))
+        reaction_strength = str(context.get("reaction_strength") or "none")
+        confirmation = str(context.get("structure_confirmation_reason") or "none")
+        summary = (
+            f"{timeframe} liquidity active at {zone.get('label', 'level')} "
+            f"(state={state}, reaction={reaction_strength}/{reaction:.2f}, "
+            f"structure_bias={bias}, trend={trend}, alignment={alignment})"
+        )
+        debug = []
+        if confirmation != "none":
+            debug.append(f"confirmation={confirmation}")
+        if context.get("liquidity_debug"):
+            debug.append(str(context["liquidity_debug"]))
+        if debug:
+            return f"{summary} | {', '.join(debug)}"
+        return summary
+
+    summary = (
         f"{timeframe} context active near {format_context_label(context)} "
         f"(zone={zone_quality:.2f}, reaction={reaction:.2f}, trend={trend}, alignment={alignment})"
     )
+    if str(zone.get("type") or "").upper() != "FVG":
+        return summary
+
+    extras = []
+    fvg_class = zone.get("fvg_class") or context.get("fvg_class")
+    if fvg_class:
+        extras.append(f"class={fvg_class}")
+    if "tradable" in zone or "tradable" in context:
+        extras.append(f"tradable={bool(zone.get('tradable', context.get('tradable')))}")
+    mitigation = zone.get("mitigation_status") or context.get("mitigation_status")
+    if mitigation:
+        extras.append(f"mitigation={mitigation}")
+    location = zone.get("location_in_range") or context.get("location_in_range")
+    if location:
+        extras.append(f"location={location}")
+    if extras:
+        return f"{summary} | {', '.join(extras)}"
+    return summary
 
 
 def describe_watch_reason(watch: dict[str, Any]) -> str:
@@ -99,6 +174,8 @@ def describe_waiting_mss_reason(watch: dict[str, Any]) -> str:
 def describe_context_wait(primary_context: dict[str, Any] | None) -> str:
     if primary_context is None:
         return "waiting: HTF context"
+    if _is_liquidity_context(primary_context) and _context_market_bias(primary_context) not in {"Long", "Short"}:
+        return f"waiting: confirmation at {format_context_label(primary_context)}"
     return f"waiting: LTF sweep near {format_context_label(primary_context)}"
 
 
@@ -177,6 +254,13 @@ def _format_price_range(low: Any, high: Any) -> str:
     return f"{_format_price_value(low)}-{_format_price_value(high)}"
 
 
+def _format_liquidity_price(zone: dict[str, Any]) -> str:
+    level = zone.get("liquidity_level")
+    if level is None:
+        level = zone.get("low")
+    return _format_price_value(level)
+
+
 def _context_zone_source(
     primary_context: dict[str, Any] | None,
     active_watch: dict[str, Any] | None,
@@ -207,6 +291,13 @@ def format_htf_zone(
         return "-"
     zone = context.get("zone") or {}
     label = str(zone.get("label") or "").strip()
+    if bool(zone.get("is_liquidity_level")):
+        level_text = _format_liquidity_price(zone)
+        if label and level_text != "-":
+            return f"{label} | {level_text}"
+        if label:
+            return label
+        return level_text
     zone_range = _format_price_range(zone.get("low"), zone.get("high"))
     if label and zone_range != "-":
         return f"{label} | {zone_range}"
@@ -238,9 +329,10 @@ def format_htf_zone_source(primary_context: dict[str, Any] | None, snapshot: dic
     zone_type = str(zone.get("type") or zone.get("label") or "zone")
     source_index = zone.get("source_index")
 
+    if bool(zone.get("is_liquidity_level")):
+        return f"{zone_type} liquidity level @ {_format_liquidity_price(zone)}"
+
     if source_index is None:
-        if zone_type in {"Previous Day High", "Previous Day Low", "Previous Week High", "Previous Week Low"}:
-            return f"{zone_type} reference band"
         return f"{timeframe} {zone_type} (source candle unavailable)"
 
     if not snapshot:
@@ -378,9 +470,15 @@ def build_detail_payload(
     snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     source = confirmed_signal or active_watch
+    liquidity_state = primary_context.get("liquidity_interaction_state") if primary_context else None
+    market_bias = htf_bias
+    reaction_strength = str((primary_context or {}).get("reaction_strength") or "-")
     return {
         "current_state": state,
         "htf_bias": htf_bias,
+        "market_structure_bias": market_bias,
+        "liquidity_interaction_state": _humanize_liquidity_state(liquidity_state),
+        "reaction_strength": reaction_strength,
         "htf_context": format_context_label(primary_context),
         "htf_zone_type": format_htf_zone_type(primary_context),
         "htf_zone_source": format_htf_zone_source(primary_context, snapshot),

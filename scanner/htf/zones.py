@@ -50,10 +50,14 @@ def build_previous_levels(rates_d1, rates_w1, band):
                 label="Previous Day High",
                 timeframe="D1",
                 zone_type="Previous Day High",
-                bias="Short",
-                low=prev_day["high"] - band,
-                high=prev_day["high"] + band,
+                bias="Neutral",
+                low=prev_day["high"],
+                high=prev_day["high"],
                 quality=HTF_PREVIOUS_DAY_QUALITY,
+                is_liquidity_level=True,
+                liquidity_level=float(prev_day["high"]),
+                tolerance=float(band),
+                source_time=int(prev_day["time"]),
             )
         )
         zones.append(
@@ -61,10 +65,14 @@ def build_previous_levels(rates_d1, rates_w1, band):
                 label="Previous Day Low",
                 timeframe="D1",
                 zone_type="Previous Day Low",
-                bias="Long",
-                low=prev_day["low"] - band,
-                high=prev_day["low"] + band,
+                bias="Neutral",
+                low=prev_day["low"],
+                high=prev_day["low"],
                 quality=HTF_PREVIOUS_DAY_QUALITY,
+                is_liquidity_level=True,
+                liquidity_level=float(prev_day["low"]),
+                tolerance=float(band),
+                source_time=int(prev_day["time"]),
             )
         )
 
@@ -76,10 +84,14 @@ def build_previous_levels(rates_d1, rates_w1, band):
                 label="Previous Week High",
                 timeframe="W1",
                 zone_type="Previous Week High",
-                bias="Short",
-                low=prev_week["high"] - weekly_band,
-                high=prev_week["high"] + weekly_band,
+                bias="Neutral",
+                low=prev_week["high"],
+                high=prev_week["high"],
                 quality=HTF_PREVIOUS_WEEK_QUALITY,
+                is_liquidity_level=True,
+                liquidity_level=float(prev_week["high"]),
+                tolerance=float(weekly_band),
+                source_time=int(prev_week["time"]),
             )
         )
         zones.append(
@@ -87,10 +99,14 @@ def build_previous_levels(rates_d1, rates_w1, band):
                 label="Previous Week Low",
                 timeframe="W1",
                 zone_type="Previous Week Low",
-                bias="Long",
-                low=prev_week["low"] - weekly_band,
-                high=prev_week["low"] + weekly_band,
+                bias="Neutral",
+                low=prev_week["low"],
+                high=prev_week["low"],
                 quality=HTF_PREVIOUS_WEEK_QUALITY,
+                is_liquidity_level=True,
+                liquidity_level=float(prev_week["low"]),
+                tolerance=float(weekly_band),
+                source_time=int(prev_week["time"]),
             )
         )
 

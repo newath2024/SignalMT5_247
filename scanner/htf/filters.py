@@ -19,6 +19,7 @@ from ..config.htf import (
     HTF_TOLERANCE_MIN_POINTS,
     HTF_TOLERANCE_ZONE_WIDTH_RATIO,
 )
+from .liquidity import evaluate_liquidity_level, is_liquidity_level
 from ..structure.swings import summarize_market_structure
 from ..utils import average_range, clamp, zone_distance, zone_mid, zone_width
 
@@ -128,8 +129,13 @@ def evaluate_htf_zone(zone, snapshot, structure=None):
     rates_h4 = snapshot["rates"]["H4"]
     avg_h1 = average_range(rates_h1, 20)
     structure = structure or determine_htf_structure(snapshot)
+
+    if is_liquidity_level(zone):
+        return evaluate_liquidity_level(zone, snapshot, structure=structure)
+
     zone_rates = rates_h4 if zone["timeframe"] == "H4" else rates_h1
     zone_valid, invalidation_reason = _zone_invalidation_status(zone, zone_rates, len(zone_rates) - 1)
+    is_fvg_zone = str(zone.get("type") or "").upper() == "FVG"
 
     if not zone_valid:
         return {
@@ -215,6 +221,12 @@ def evaluate_htf_zone(zone, snapshot, structure=None):
         clear = False
 
     composite = zone["quality"] + reaction + distance_score * HTF_COMPOSITE_DISTANCE_WEIGHT
+    if is_fvg_zone and not zone.get("tradable", False):
+        clear = False
+        composite -= 0.18
+    mitigation_status = zone.get("mitigation_status")
+    if is_fvg_zone and mitigation_status == "deep_mitigated":
+        composite -= 0.08
     if trend_alignment == "aligned":
         composite += 0.05
     elif trend_alignment == "countertrend":
@@ -232,4 +244,7 @@ def evaluate_htf_zone(zone, snapshot, structure=None):
         "score": composite,
         "valid": True,
         "invalidation_reason": None,
+        "tradable": zone.get("tradable"),
+        "fvg_class": zone.get("fvg_class"),
+        "mitigation_status": mitigation_status,
     }

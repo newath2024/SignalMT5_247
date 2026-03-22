@@ -29,7 +29,7 @@ def build_watch_setup(snapshot, context, trigger, trigger_timeframe):
         "symbol": snapshot["symbol"],
         "bias": bias,
         "timeframe": trigger_timeframe,
-        "htf_context": context["zone"]["label"],
+        "htf_context": context.get("liquidity_interaction_label") or context["zone"]["label"],
         "htf_zone": context["zone"],
         "context": context,
         "sweep_index": trigger["sweep_index"],

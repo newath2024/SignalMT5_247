@@ -32,6 +32,7 @@ from ..config.ltf import (
 )
 from ..utils import body_strength, clamp, zone_distance
 from .displacement import displacement_strength
+from .fvg_assessment import assess_fvg_candidate
 from .swings import (
     build_swing_structure,
     get_last_confirmed_swing_high_before,
@@ -192,15 +193,8 @@ def is_valid_ob(rates, candidate, avg_range, point, swings, trend, has_fvg=False
 
 
 def is_valid_fvg(candidate, rates, avg_range, point):
-    width = float(candidate["high"] - candidate["low"])
-    min_width = max(avg_range * HTF_FVG_MIN_GAP_RATIO, point * HTF_FVG_MIN_POINTS)
-    formed_in_displacement = body_strength(rates[candidate["source_index"]], point) >= HTF_FVG_DISPLACEMENT_BODY_THRESHOLD
-    return {
-        "valid": width >= min_width,
-        "width": width,
-        "formed_in_displacement": formed_in_displacement,
-        "width_ratio": width / max(avg_range, point),
-    }
+    timeframe_name = str(candidate.get("timeframe") or "H1")
+    return assess_fvg_candidate(candidate, rates, timeframe_name, avg_range, point)
 
 
 def find_first_touch_after_creation(rates, source_index, zone_low, zone_high):

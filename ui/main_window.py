@@ -24,6 +24,7 @@ def launch_desktop(controller, auto_start: bool = True):
             QMainWindow,
             QMessageBox,
             QPushButton,
+            QScrollArea,
             QSpinBox,
             QSplitter,
             QTableWidget,
@@ -145,6 +146,10 @@ def launch_desktop(controller, auto_start: bool = True):
                     border: 1px solid #dbe4ee;
                     border-radius: 10px;
                     padding: 8px;
+                }
+                QScrollArea {
+                    border: none;
+                    background: transparent;
                 }
                 """
             )
@@ -299,13 +304,26 @@ def launch_desktop(controller, auto_start: bool = True):
             table_layout.addWidget(self.symbol_table)
 
             inspector_box = QGroupBox("Symbol Inspector")
-            inspector_layout = QFormLayout(inspector_box)
+            inspector_box_layout = QVBoxLayout(inspector_box)
+            inspector_box_layout.setContentsMargins(10, 12, 10, 10)
+
+            inspector_scroll = QScrollArea()
+            inspector_scroll.setWidgetResizable(True)
+            inspector_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            inspector_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            inspector_scroll.setFrameShape(QFrame.NoFrame)
+
+            inspector_panel = QWidget()
+            inspector_layout = QFormLayout(inspector_panel)
             inspector_layout.setContentsMargins(12, 12, 12, 12)
             inspector_layout.setSpacing(10)
 
             for key, label_text in (
                 ("current_state", "Current State"),
                 ("htf_bias", "HTF Bias"),
+                ("market_structure_bias", "Market Bias"),
+                ("liquidity_interaction_state", "Liquidity State"),
+                ("reaction_strength", "Reaction Strength"),
                 ("phase", "Phase"),
                 ("reason", "Reason"),
                 ("score", "Score"),
@@ -331,6 +349,9 @@ def launch_desktop(controller, auto_start: bool = True):
                 value.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 self.inspector_fields[key] = value
                 inspector_layout.addRow(label_text, value)
+
+            inspector_scroll.setWidget(inspector_panel)
+            inspector_box_layout.addWidget(inspector_scroll)
 
             splitter.addWidget(table_box)
             splitter.addWidget(inspector_box)
