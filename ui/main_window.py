@@ -12,6 +12,7 @@ def launch_desktop(controller, auto_start: bool = True):
         from PySide6.QtWidgets import (
             QAbstractItemView,
             QApplication,
+            QCheckBox,
             QComboBox,
             QFileDialog,
             QFormLayout,
@@ -50,12 +51,18 @@ def launch_desktop(controller, auto_start: bool = True):
         format_price,
         format_score,
         format_short_time,
+        format_symbol_focus,
+        format_htf_context_short,
         get_scanner_status_meta,
+        get_priority_label,
+        get_state_badge,
         get_state_label,
         format_timestamp,
         format_zone,
+        is_actionable_symbol,
         is_recent,
         log_matches_filter,
+        sort_symbol_rows,
         state_colors,
     )
 
@@ -178,8 +185,11 @@ def launch_desktop(controller, auto_start: bool = True):
             self.refresh_button = QPushButton("Refresh UI")
             self.clear_log_button = QPushButton("Clear Activity Log")
             self.export_log_button = QPushButton("Export Logs")
+            self.actionable_only_checkbox = QCheckBox("Show only actionable setups")
+            self.symbol_count_label = QLabel("Showing 0/0 symbols")
+            self.symbol_count_label.setStyleSheet("font-size: 12px; color: #64748b;")
 
-            self.symbol_table = QTableWidget(0, 10)
+            self.symbol_table = QTableWidget(0, 8)
             self.watch_table = QTableWidget(0, 9)
             self.alert_table = QTableWidget(0, 9)
             self.log_view = QTextEdit()
@@ -297,10 +307,19 @@ def launch_desktop(controller, auto_start: bool = True):
             table_box = QGroupBox("Scanner State")
             table_layout = QVBoxLayout(table_box)
             table_layout.setContentsMargins(10, 12, 10, 10)
+            table_header_row = QHBoxLayout()
+            table_header_row.addWidget(self.actionable_only_checkbox)
+            table_header_row.addWidget(self.symbol_count_label)
+            table_header_row.addStretch(1)
+            table_header_row.addWidget(self._make_legend_pill("⚪ Idle", "idle"))
+            table_header_row.addWidget(self._make_legend_pill("🟡 Waiting", "context_found"))
+            table_header_row.addWidget(self._make_legend_pill("🟢 Armed / Ready", "armed"))
+            table_header_row.addWidget(self._make_legend_pill("🔴 Rejected", "rejected"))
+            table_layout.addLayout(table_header_row)
             self.symbol_table.setHorizontalHeaderLabels(
-                ["Symbol", "State", "Price", "HTF Bias", "TF", "Score", "Phase", "Reason", "Last Update", "Cooldown"]
+                ["Symbol", "Status", "HTF", "Next", "TF", "Price", "Priority", "Updated"]
             )
-            self._configure_table(self.symbol_table, stretch_column=7)
+            self._configure_table(self.symbol_table, stretch_column=3)
             table_layout.addWidget(self.symbol_table)
 
             inspector_box = QGroupBox("Symbol Inspector")
@@ -314,41 +333,58 @@ def launch_desktop(controller, auto_start: bool = True):
             inspector_scroll.setFrameShape(QFrame.NoFrame)
 
             inspector_panel = QWidget()
-            inspector_layout = QFormLayout(inspector_panel)
+            inspector_layout = QVBoxLayout(inspector_panel)
             inspector_layout.setContentsMargins(12, 12, 12, 12)
-            inspector_layout.setSpacing(10)
+            inspector_layout.setSpacing(12)
 
-            for key, label_text in (
-                ("current_state", "Current State"),
-                ("htf_bias", "HTF Bias"),
-                ("market_structure_bias", "Market Bias"),
-                ("liquidity_interaction_state", "Liquidity State"),
-                ("reaction_strength", "Reaction Strength"),
-                ("phase", "Phase"),
-                ("reason", "Reason"),
-                ("score", "Score"),
-                ("htf_context", "HTF Context"),
-                ("htf_zone_type", "HTF Zone Type"),
-                ("htf_zone_source", "HTF Source"),
-                ("htf_context_reason", "Context Detail"),
-                ("last_detected_sweep", "Last Sweep"),
-                ("last_detected_mss", "Last MSS"),
-                ("last_detected_ifvg", "Last iFVG"),
-                ("rejection_reason", "Rejection"),
-                ("last_alert_time", "Last Alert"),
-                ("last_alert_details", "Last Alert Details"),
-                ("cooldown_info", "Cooldown"),
-                ("active_watch_id", "Active Watch"),
-                ("active_watch_info", "Active Watch Info"),
-                ("zone", "Zone"),
-                ("zone_top_bottom", "Zone Top/Bottom"),
-                ("timeline", "Timeline"),
-            ):
-                value = QLabel("-")
-                value.setWordWrap(True)
-                value.setTextInteractionFlags(Qt.TextSelectableByMouse)
-                self.inspector_fields[key] = value
-                inspector_layout.addRow(label_text, value)
+            self._add_inspector_section(
+                inspector_layout,
+                "Status",
+                (
+                    ("current_state", "Current State"),
+                    ("priority", "Priority"),
+                    ("phase", "Phase"),
+                    ("reason", "Next Step"),
+                    ("score", "Score"),
+                    ("cooldown_info", "Cooldown"),
+                ),
+            )
+            self._add_inspector_section(
+                inspector_layout,
+                "HTF Context",
+                (
+                    ("htf_bias", "HTF Bias"),
+                    ("htf_context", "Context"),
+                    ("htf_zone_type", "Zone Type"),
+                    ("zone", "Zone"),
+                    ("htf_zone_source", "Source"),
+                ),
+            )
+            self._add_inspector_section(
+                inspector_layout,
+                "Structure",
+                (
+                    ("market_structure_bias", "Market Bias"),
+                    ("liquidity_interaction_state", "Liquidity"),
+                    ("reaction_strength", "Reaction"),
+                    ("htf_context_reason", "Context Note"),
+                    ("timeline", "Recent Timeline"),
+                ),
+            )
+            self._add_inspector_section(
+                inspector_layout,
+                "LTF Confirmation",
+                (
+                    ("last_detected_sweep", "Last Sweep"),
+                    ("last_detected_mss", "MSS"),
+                    ("last_detected_ifvg", "iFVG"),
+                    ("active_watch_info", "Watch"),
+                    ("zone_top_bottom", "Entry Zone"),
+                    ("last_alert_time", "Last Alert"),
+                    ("rejection_reason", "Rejection"),
+                ),
+            )
+            inspector_layout.addStretch(1)
 
             inspector_scroll.setWidget(inspector_panel)
             inspector_box_layout.addWidget(inspector_scroll)
@@ -413,12 +449,40 @@ def launch_desktop(controller, auto_start: bool = True):
             table.setSelectionMode(QAbstractItemView.SingleSelection)
             table.setAlternatingRowColors(False)
             table.verticalHeader().setVisible(False)
+            table.verticalHeader().setDefaultSectionSize(32)
             header = table.horizontalHeader()
             header.setStretchLastSection(False)
             for index in range(table.columnCount()):
                 header.setSectionResizeMode(index, QHeaderView.ResizeToContents)
             if stretch_column is not None:
                 header.setSectionResizeMode(stretch_column, QHeaderView.Stretch)
+
+        def _make_legend_pill(self, text: str, state: str) -> QLabel:
+            palette = state_colors(state)
+            pill = QLabel(text)
+            pill.setStyleSheet(
+                "padding: 4px 10px; border-radius: 999px; "
+                f"background: {palette['bg']}; color: {palette['fg']}; font-size: 12px; font-weight: 600;"
+            )
+            return pill
+
+        def _create_inspector_value_label(self) -> QLabel:
+            value = QLabel("-")
+            value.setWordWrap(True)
+            value.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            value.setStyleSheet("font-size: 12px; color: #0f172a;")
+            return value
+
+        def _add_inspector_section(self, parent_layout, title: str, fields):
+            section = QGroupBox(title)
+            form = QFormLayout(section)
+            form.setContentsMargins(10, 12, 10, 10)
+            form.setSpacing(8)
+            for key, label_text in fields:
+                value = self._create_inspector_value_label()
+                self.inspector_fields[key] = value
+                form.addRow(label_text, value)
+            parent_layout.addWidget(section)
 
         def _wire_events(self):
             self.start_button.clicked.connect(self.start_scanner)
@@ -430,6 +494,7 @@ def launch_desktop(controller, auto_start: bool = True):
             self.export_log_button.clicked.connect(self.export_logs)
             self.ob_fvg_mode_combo.currentIndexChanged.connect(self.change_ob_fvg_mode)
             self.log_filter.currentIndexChanged.connect(self.refresh_activity_log)
+            self.actionable_only_checkbox.stateChanged.connect(self._refresh_symbol_table_view)
             self.symbol_table.itemSelectionChanged.connect(self.update_symbol_inspector)
 
         def _selected_symbol(self) -> str | None:
@@ -611,33 +676,41 @@ def launch_desktop(controller, auto_start: bool = True):
 
         def _fill_symbol_table(self, rows: list[dict]):
             selected_symbol = self._selected_symbol()
-            self._symbol_rows = list(rows)
-            self.symbol_table.setRowCount(len(rows))
+            display_rows = sort_symbol_rows(rows)
+            total_rows = len(display_rows)
+            if self.actionable_only_checkbox.isChecked():
+                display_rows = [item for item in display_rows if is_actionable_symbol(item)]
+            self._symbol_rows = display_rows
+            self.symbol_count_label.setText(f"Showing {len(display_rows)}/{total_rows} symbols")
+            self.symbol_table.setRowCount(len(display_rows))
             bold_font = QFont()
             bold_font.setBold(True)
-            for row_index, item in enumerate(rows):
+            for row_index, item in enumerate(display_rows):
+                state = item.get("state", "idle")
+                priority = get_priority_label(item)
                 values = [
                     item.get("symbol", "-"),
-                    get_state_label(item.get("state")),
-                    format_price(item.get("price")),
-                    item.get("bias", "neutral"),
+                    get_state_badge(state),
+                    format_htf_context_short(item),
+                    format_symbol_focus(item),
                     item.get("tf", "-"),
-                    format_score(item.get("score"), item.get("grade")),
-                    format_phase(item.get("phase")),
-                    item.get("reason", "-"),
-                    format_timestamp(item.get("last_update")),
-                    format_cooldown(item.get("cooldown_remaining")),
+                    format_price(item.get("price")),
+                    priority,
+                    format_relative_age(item.get("last_update")),
                 ]
                 for column_index, value in enumerate(values):
                     cell = QTableWidgetItem(str(value))
                     cell.setData(Qt.UserRole, item)
+                    if column_index in {1, 4, 5, 6, 7}:
+                        cell.setTextAlignment(Qt.AlignCenter)
                     self.symbol_table.setItem(row_index, column_index, cell)
 
-                state = item.get("state", "idle")
                 self._paint_row(self.symbol_table, row_index, state)
-                if state in {"armed", "waiting_mss", "confirmed"}:
-                    self.symbol_table.item(row_index, 0).setFont(bold_font)
-                    self.symbol_table.item(row_index, 1).setFont(bold_font)
+                if priority == "High":
+                    for column_index in range(self.symbol_table.columnCount()):
+                        current_item = self.symbol_table.item(row_index, column_index)
+                        if current_item is not None:
+                            current_item.setFont(bold_font)
                 if is_recent(item.get("last_alert_time")) and state in {"confirmed", "cooldown"}:
                     accent_font = QFont(bold_font)
                     accent_font.setUnderline(True)
@@ -645,11 +718,11 @@ def launch_desktop(controller, auto_start: bool = True):
                     self.symbol_table.item(row_index, 1).setFont(accent_font)
 
             if selected_symbol:
-                for row_index, item in enumerate(rows):
+                for row_index, item in enumerate(display_rows):
                     if item.get("symbol") == selected_symbol:
                         self.symbol_table.selectRow(row_index)
                         break
-            elif rows and self.symbol_table.currentRow() < 0:
+            elif display_rows and self.symbol_table.currentRow() < 0:
                 self.symbol_table.selectRow(0)
 
         def _fill_watch_table(self, rows: list[dict]):
@@ -659,15 +732,18 @@ def launch_desktop(controller, auto_start: bool = True):
                     item.get("symbol", "-"),
                     item.get("timeframe", "-"),
                     item.get("direction") or ("LONG" if item.get("bias") == "Long" else "SHORT" if item.get("bias") == "Short" else "-"),
-                    item.get("htf_context", "-"),
+                    format_htf_context_short({"htf_context": item.get("htf_context"), "detail": {}}),
                     item.get("ltf_sweep_status", "-"),
-                    get_state_label(item.get("status")),
+                    get_state_badge(item.get("status")),
                     item.get("waiting_for", "-"),
                     format_zone(item.get("zone_top"), item.get("zone_bottom")),
                     format_short_time(item.get("armed_at")),
                 ]
                 for column_index, value in enumerate(values):
-                    self.watch_table.setItem(row_index, column_index, QTableWidgetItem(str(value)))
+                    watch_cell = QTableWidgetItem(str(value))
+                    if column_index in {1, 2, 5, 8}:
+                        watch_cell.setTextAlignment(Qt.AlignCenter)
+                    self.watch_table.setItem(row_index, column_index, watch_cell)
                 self._paint_row(self.watch_table, row_index, item.get("status", "idle"))
 
         def _fill_alert_table(self, rows: list[dict]):
@@ -709,18 +785,31 @@ def launch_desktop(controller, auto_start: bool = True):
         def update_symbol_inspector(self):
             row = self.symbol_table.currentRow()
             if row < 0 or row >= len(self._symbol_rows):
-                payload = None
+                for label in self.inspector_fields.values():
+                    label.setText("-")
+                return
             else:
                 payload = self._symbol_rows[row]
 
             detail = dict((payload or {}).get("detail") or {})
-            detail.setdefault("current_state", (payload or {}).get("state", "-"))
-            detail.setdefault("htf_bias", (payload or {}).get("bias", "-"))
-            detail.setdefault("phase", format_phase((payload or {}).get("phase", "-")))
-            detail.setdefault("reason", (payload or {}).get("reason", "-"))
-            detail.setdefault("score", format_score((payload or {}).get("score"), (payload or {}).get("grade")))
-            detail.setdefault("htf_context", (payload or {}).get("htf_context", "-"))
-            detail.setdefault("last_alert_time", (payload or {}).get("last_alert_time"))
+            detail["current_state"] = get_state_badge((payload or {}).get("state", "-"))
+            detail["priority"] = get_priority_label(payload)
+            detail["htf_bias"] = (payload or {}).get("bias", "-")
+            detail["phase"] = format_phase((payload or {}).get("phase", "-"))
+            detail["reason"] = format_symbol_focus(payload)
+            detail["score"] = format_score((payload or {}).get("score"), (payload or {}).get("grade"))
+            detail["htf_context"] = format_htf_context_short(payload)
+            detail["last_alert_time"] = (payload or {}).get("last_alert_time")
+            detail["htf_context_reason"] = self._format_structure_note(payload, detail)
+            detail["last_detected_sweep"] = self._format_detail_text(detail.get("last_detected_sweep"))
+            detail["last_detected_mss"] = self._format_detail_text(detail.get("last_detected_mss"))
+            detail["last_detected_ifvg"] = self._format_detail_text(detail.get("last_detected_ifvg"))
+            detail["active_watch_info"] = self._format_detail_text(detail.get("active_watch_info"))
+            detail["rejection_reason"] = self._format_detail_text(detail.get("rejection_reason"))
+            detail["timeline"] = self._format_detail_text(detail.get("timeline"))
+            detail["zone"] = self._format_detail_text(detail.get("zone"))
+            detail["zone_top_bottom"] = self._format_detail_text(detail.get("zone_top_bottom"))
+            detail["htf_zone_source"] = self._format_detail_text(detail.get("htf_zone_source"))
             cooldown_value = format_cooldown((payload or {}).get("cooldown_remaining"))
             if cooldown_value != "-":
                 detail["cooldown_info"] = cooldown_value
@@ -728,9 +817,37 @@ def launch_desktop(controller, auto_start: bool = True):
                 value = detail.get(key, "-")
                 if key in {"last_alert_time"}:
                     value = format_timestamp(value)
-                elif key == "current_state":
-                    value = get_state_label(value)
                 label.setText(str(value or "-"))
+
+        def _refresh_symbol_table_view(self):
+            if not self._last_snapshot:
+                return
+            self._fill_symbol_table(self._last_snapshot.get("symbols") or [])
+            self.update_symbol_inspector()
+
+        @staticmethod
+        def _format_detail_text(value) -> str:
+            text = str(value or "-").strip()
+            if not text or text == "-":
+                return "-"
+            return (
+                text.replace("Previous Day High", "PDH")
+                .replace("Previous Day Low", "PDL")
+                .replace("Previous Week High", "PWH")
+                .replace("Previous Week Low", "PWL")
+            )
+
+        def _format_structure_note(self, payload: dict | None, detail: dict) -> str:
+            liquidity_state = str(detail.get("liquidity_interaction_state") or "").strip()
+            reaction = str(detail.get("reaction_strength") or "-").strip()
+            market_bias = str(detail.get("market_structure_bias") or detail.get("htf_bias") or "-").strip()
+            if liquidity_state and liquidity_state not in {"-", "Untouched"}:
+                context = format_htf_context_short(payload)
+                return f"{context} | {reaction} reaction | {market_bias}"
+            zone_type = str(detail.get("htf_zone_type") or "").strip()
+            if zone_type and zone_type != "-":
+                return f"{zone_type} | {reaction} reaction | {market_bias}"
+            return self._format_detail_text(detail.get("htf_context_reason"))
 
         @staticmethod
         def _paint_row(table, row_index: int, state: str, tint_only: bool = False):

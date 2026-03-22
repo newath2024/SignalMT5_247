@@ -8,78 +8,91 @@ STATE_META = {
         "label": "Idle",
         "bg": "#e5e7eb",
         "fg": "#4b5563",
+        "icon": "⚪",
         "severity": "neutral",
     },
     "context_found": {
         "label": "HTF Context",
         "bg": "#fef3c7",
         "fg": "#92400e",
+        "icon": "🟡",
         "severity": "watch",
     },
     "watch_armed": {
-        "label": "Watching Setup",
-        "bg": "#fef3c7",
-        "fg": "#92400e",
+        "label": "Armed",
+        "bg": "#dcfce7",
+        "fg": "#166534",
+        "icon": "🟢",
         "severity": "watch",
     },
     "armed": {
-        "label": "Watching Setup",
-        "bg": "#fef3c7",
-        "fg": "#92400e",
+        "label": "Armed",
+        "bg": "#dcfce7",
+        "fg": "#166534",
+        "icon": "🟢",
         "severity": "watch",
     },
     "setup_building": {
-        "label": "Setup Forming",
+        "label": "Waiting",
         "bg": "#fde68a",
         "fg": "#92400e",
+        "icon": "🟡",
         "severity": "watch",
     },
     "waiting_mss": {
-        "label": "Setup Forming",
+        "label": "Waiting MSS",
         "bg": "#fde68a",
         "fg": "#92400e",
+        "icon": "🟡",
         "severity": "watch",
     },
     "entry_ready": {
-        "label": "Ready to Enter",
-        "bg": "#dbeafe",
-        "fg": "#1d4ed8",
+        "label": "Ready",
+        "bg": "#dcfce7",
+        "fg": "#166534",
+        "icon": "🟢",
         "severity": "signal",
     },
     "confirmed": {
-        "label": "Ready to Enter",
-        "bg": "#dbeafe",
-        "fg": "#1d4ed8",
+        "label": "Ready",
+        "bg": "#dcfce7",
+        "fg": "#166534",
+        "icon": "🟢",
         "severity": "signal",
     },
     "alerted": {
         "label": "Signal Sent",
-        "bg": "#dbeafe",
-        "fg": "#1d4ed8",
+        "bg": "#dcfce7",
+        "fg": "#166534",
+        "icon": "🟢",
         "severity": "signal",
     },
     "cooldown": {
         "label": "Cooling Down",
         "bg": "#e5e7eb",
         "fg": "#4b5563",
+        "icon": "⚪",
         "severity": "neutral",
     },
     "rejected": {
-        "label": "Setup Rejected",
+        "label": "Rejected",
         "bg": "#fee2e2",
         "fg": "#991b1b",
+        "icon": "🔴",
         "severity": "warning",
     },
     "expired": {
         "label": "Context Invalid",
         "bg": "#fee2e2",
         "fg": "#991b1b",
+        "icon": "🔴",
         "severity": "warning",
     },
     "error": {
         "label": "Error",
         "bg": "#fecaca",
         "fg": "#7f1d1d",
+        "icon": "🔴",
         "severity": "error",
     },
 }
@@ -89,7 +102,23 @@ UNKNOWN_STATE_META = {
     "label": "Unknown",
     "bg": "#f3f4f6",
     "fg": "#111827",
+    "icon": "⚪",
     "severity": "neutral",
+}
+
+
+LIQUIDITY_SHORT_LABELS = {
+    "Previous Day High": "PDH",
+    "Previous Day Low": "PDL",
+    "Previous Week High": "PWH",
+    "Previous Week Low": "PWL",
+}
+
+
+PRIORITY_META = {
+    "high": {"label": "High", "rank": 0, "actionable": True},
+    "medium": {"label": "Medium", "rank": 1, "actionable": False},
+    "low": {"label": "Low", "rank": 2, "actionable": False},
 }
 
 
@@ -143,9 +172,130 @@ def get_state_label(state: str | None) -> str:
     return str(get_state_meta(state)["label"])
 
 
+def get_state_icon(state: str | None) -> str:
+    return str(get_state_meta(state)["icon"])
+
+
+def get_state_badge(state: str | None) -> str:
+    meta = get_state_meta(state)
+    return f"{meta['icon']} {meta['label']}"
+
+
 def state_colors(state: str | None) -> dict[str, str]:
     meta = get_state_meta(state)
     return {"bg": str(meta["bg"]), "fg": str(meta["fg"])}
+
+
+def _timestamp_value(value) -> float:
+    stamp = _coerce_datetime(value)
+    return stamp.timestamp() if stamp else 0.0
+
+
+def abbreviate_liquidity_label(text: str | None) -> str:
+    value = str(text or "").strip()
+    if not value:
+        return "-"
+    for long_label, short_label in LIQUIDITY_SHORT_LABELS.items():
+        value = value.replace(long_label, short_label)
+    return value
+
+
+def _extract_liquidity_label(*values) -> str | None:
+    for value in values:
+        lowered = str(value or "").lower()
+        for label in LIQUIDITY_SHORT_LABELS:
+            if label.lower() in lowered:
+                return label
+    return None
+
+
+def _normalize_liquidity_state(value: str | None) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"swept_and_reclaimed", "sweep + reclaim"}:
+        return "Sweep + reclaim"
+    if text == "swept":
+        return "Swept"
+    if text == "tapped":
+        return "Tapped"
+    if text in {"at", "untouched"}:
+        return "At"
+    return ""
+
+
+def format_htf_context_short(row: dict | None) -> str:
+    payload = dict(row or {})
+    detail = dict(payload.get("detail") or {})
+    raw_context = str(detail.get("htf_context") or payload.get("htf_context") or "-").strip()
+    zone_type = str(detail.get("htf_zone_type") or "").strip()
+    liquidity_state = _normalize_liquidity_state(detail.get("liquidity_interaction_state"))
+    liquidity_label = _extract_liquidity_label(raw_context, zone_type, detail.get("zone"), detail.get("htf_zone_source"))
+
+    if liquidity_label:
+        short_label = LIQUIDITY_SHORT_LABELS[liquidity_label]
+        if liquidity_state:
+            return f"{liquidity_state} {short_label}".strip()
+        return short_label
+
+    if zone_type and zone_type != "-":
+        return abbreviate_liquidity_label(zone_type)
+    return abbreviate_liquidity_label(raw_context)
+
+
+def format_symbol_focus(row: dict | None) -> str:
+    payload = dict(row or {})
+    state = str(payload.get("state") or "").lower()
+    reason = str(payload.get("reason") or "").strip()
+
+    if state == "confirmed":
+        return "Ready now"
+    if state == "armed":
+        return "Watch armed"
+    if state == "waiting_mss":
+        return "Waiting MSS after sweep"
+    if state == "context_found":
+        return "Waiting LTF sweep" if "ltf sweep" in reason.lower() else "Waiting HTF trigger"
+    if state == "rejected":
+        if "strict ifvg" in reason.lower():
+            return "No strict iFVG"
+        return reason.replace("rejected:", "").strip() or "Rejected"
+    if state == "cooldown":
+        return "Cooldown"
+    if state == "error":
+        return "Scanner error"
+    return "No setup"
+
+
+def get_priority_meta(row: dict | None) -> dict[str, str | int | bool]:
+    payload = dict(row or {})
+    state = str(payload.get("state") or "").lower()
+    phase = str(payload.get("phase") or "").upper()
+
+    if state in {"confirmed", "armed", "waiting_mss"}:
+        return PRIORITY_META["high"]
+    if state == "context_found":
+        return PRIORITY_META["medium"] if phase == "LTF_SWEEP" else PRIORITY_META["low"]
+    return PRIORITY_META["low"]
+
+
+def get_priority_label(row: dict | None) -> str:
+    return str(get_priority_meta(row)["label"])
+
+
+def is_actionable_symbol(row: dict | None) -> bool:
+    return bool(get_priority_meta(row)["actionable"])
+
+
+def sort_symbol_rows(rows: list[dict] | None) -> list[dict]:
+    items = list(rows or [])
+    return sorted(
+        items,
+        key=lambda item: (
+            int(get_priority_meta(item)["rank"]),
+            -float(item.get("score") or 0.0),
+            -_timestamp_value(item.get("last_update")),
+            str(item.get("symbol") or ""),
+        ),
+    )
 
 
 def _coerce_datetime(value) -> datetime | None:
