@@ -1,16 +1,16 @@
 from ..deps import mt5
 from ..utils import log, notify_once
+from core.mt5_runtime import connect_mt5_with_retry, load_mt5_runtime_settings
+
+
+_MT5_SETTINGS = load_mt5_runtime_settings()
 
 
 def connect_mt5():
-    if mt5.initialize():
-        terminal_info = mt5.terminal_info()
-        terminal_name = terminal_info.name if terminal_info else "Unknown terminal"
-        log(f"Connected to MT5: {terminal_name}")
-        return
-
-    error_code, error_message = mt5.last_error()
-    raise RuntimeError(f"MT5 initialize() failed: [{error_code}] {error_message}")
+    report = connect_mt5_with_retry(mt5, settings=_MT5_SETTINGS)
+    if not report.ready:
+        raise RuntimeError(report.message)
+    log(f"Connected to MT5: {report.terminal_name or 'Unknown terminal'}")
 
 
 def ensure_symbol_ready(symbol):
@@ -56,6 +56,20 @@ def get_candles(symbol, timeframe, count, include_current=False):
         rates = rates[:-1]
 
     return rates if len(rates) else None
+
+
+def get_live_candle(symbol, timeframe):
+    rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, 1)
+    if rates is None:
+        error_code, error_message = mt5.last_error()
+        log(
+            f"Failed to load live candle for {symbol} on timeframe {timeframe}: "
+            f"[{error_code}] {error_message}"
+        )
+        return None
+    if len(rates) == 0:
+        return None
+    return rates[-1]
 
 
 def get_current_price(symbol, fallback_price):

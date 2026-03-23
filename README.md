@@ -55,6 +55,18 @@ Chay desktop app:
 python main.py
 ```
 
+Chay bundle portable Windows:
+
+```text
+run.bat
+```
+
+Huong dan portable day du:
+
+```text
+prepare_portable.md
+```
+
 Mo app nhung chua auto start scanner:
 
 ```bash
@@ -109,6 +121,13 @@ Thu muc nay chua:
 - `data/runtime_state.json`
 - `data/history.db`
 - `logs/app.log`
+
+Khi chay bang `run.bat`, launcher se set portable runtime paths vao chinh bundle:
+
+```text
+project_root\runtime\
+project_root\logs\
+```
 
 ## Build
 

@@ -5,3 +5,11 @@ __pycache__/
 build/
 dist/
 *.spec
+.venv/
+python_embedded/
+logs/*
+!logs/.gitkeep
+runtime/*
+!runtime/.gitkeep
+mt5_portable/*
+!mt5_portable/README.txt

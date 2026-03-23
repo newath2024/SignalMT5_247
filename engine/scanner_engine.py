@@ -1,5 +1,6 @@
 import threading
 import time
+import os
 
 from core.enums import SetupPhase, SetupState
 from strategy.reason_engine import describe_error
@@ -24,6 +25,7 @@ class ScannerEngine:
         self._last_cycle = None
         self._last_error = None
         self._interval_sec = config.scanner.loop_interval_sec
+        self._mt5_retry_delay_sec = max(5, int(os.getenv("OPENCLAW_MT5_RECONNECT_DELAY_SEC", "10")))
         self._cycle_progress = self._empty_cycle_progress()
         persisted = {
             item["symbol"]: item
@@ -355,13 +357,20 @@ class ScannerEngine:
 
     def _runner(self):
         try:
-            if not self.data_gateway.ensure_connected():
-                with self._lock:
-                    self._status = "error"
-                    self._last_error = self.data_gateway.status_snapshot().get("last_error")
-                return
-
             while not self._stop_event.is_set():
+                if not self.data_gateway.ensure_connected():
+                    with self._lock:
+                        self._status = "waiting_mt5"
+                        self._last_error = self.data_gateway.status_snapshot().get("last_error")
+                    self.logger.warn(
+                        "MT5 not ready; scanner will retry automatically",
+                        phase="connection",
+                        reason=self._last_error or "waiting for MT5",
+                    )
+                    if self._stop_event.wait(self._mt5_retry_delay_sec):
+                        break
+                    continue
+
                 self._run_cycle()
                 if self._stop_event.wait(self._interval_sec):
                     break

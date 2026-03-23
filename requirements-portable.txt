@@ -1,0 +1,4 @@
+MetaTrader5==5.0.5640
+requests==2.31.0
+matplotlib==3.10.8
+PySide6==6.10.2

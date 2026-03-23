@@ -24,8 +24,14 @@ def main(argv=None):
             if args.once:
                 controller.run_once()
                 return 0
-            controller.start()
+            started, message = controller.start()
+            if not started:
+                raise RuntimeError(message)
             while True:
+                snapshot = controller.snapshot()
+                status = (snapshot.get("scanner") or {}).get("status")
+                if status == "error":
+                    return 2
                 time.sleep(1)
 
         from ui import launch_desktop

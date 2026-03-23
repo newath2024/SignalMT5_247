@@ -1,22 +1,14 @@
 OpenClaw Scanner Portable Notes
 ================================
 
-Chay desktop app:
-  OpenClawScanner.exe
+This legacy note file has been superseded by:
 
-Cach mang sang may khac:
-1. Cai MetaTrader 5 tren may dich va dang nhap tai khoan broker.
-2. Copy nguyen folder dist\OpenClawScanner sang may do.
-3. Neu dung Telegram alerts, dat file .env canh file OpenClawScanner.exe.
-4. Chay OpenClawScanner.exe va bam Start trong app.
+  prepare_portable.md
 
-Luu y quan trong:
-- Scanner da dong goi Python va code, nhung may dich van phai co MT5 terminal.
-- Luc chay lan dau, app se tao runtime folders tai:
-  %LOCALAPPDATA%\OpenClaw\
-    config\
-    data\
-    logs\
-- File .env trong folder portable se duoc copy vao AppData neu may chua co config.
-- State, cooldown, lich su alert va SQLite database se nam trong %LOCALAPPDATA%\OpenClaw\data.
-- Co the xoa nhanh runtime state bang file ResetScannerState.bat trong folder portable.
+Use that document for the current Windows portable deployment flow:
+
+- local bundled MT5 portable terminal
+- relative-path runtime folders
+- run.bat main launcher
+- restart_bot.bat supervisor loop
+- first_run_check.bat health check

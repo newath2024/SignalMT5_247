@@ -21,9 +21,9 @@ def _default_app_home():
 
 
 APP_HOME = _default_app_home()
+LOGS_DIR = Path(os.getenv("OPENCLAW_LOGS_DIR", APP_HOME / "logs")).expanduser().resolve()
 RUNTIME_CONFIG_DIR = APP_HOME / "config"
 DATA_DIR = APP_HOME / "data"
-LOGS_DIR = APP_HOME / "logs"
 ENV_FILE = RUNTIME_CONFIG_DIR / ".env"
 USER_CONFIG_FILE = RUNTIME_CONFIG_DIR / "user.json"
 STATE_FILE = DATA_DIR / "runtime_state.json"
