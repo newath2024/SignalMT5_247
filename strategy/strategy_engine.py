@@ -93,7 +93,13 @@ class StrategyEngine:
         directional_contexts = [contexts.get("Long"), contexts.get("Short")]
         directional_contexts = [item for item in directional_contexts if item is not None]
         best_directional_context = (
-            max(directional_contexts, key=lambda item: float(item.get("score") or 0.0))
+            max(
+                directional_contexts,
+                key=lambda item: (
+                    1 if item.get("rollover_active") else 0,
+                    float(item.get("score") or 0.0),
+                ),
+            )
             if directional_contexts
             else None
         )

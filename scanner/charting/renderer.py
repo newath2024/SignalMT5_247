@@ -9,7 +9,7 @@ from .annotations import configure_chart_axes, draw_candles, draw_reference_leve
 def render_htf_chart(snapshot, signal, output_path):
     zone = signal.get("htf_zone")
     timeframe_name = signal.get("htf_chart_timeframe")
-    if not CHARTING_AVAILABLE or zone is None or timeframe_name not in ("H1", "H4"):
+    if not CHARTING_AVAILABLE or zone is None or timeframe_name not in ("M30", "H1", "H4"):
         return False
 
     rates = snapshot["rates"][timeframe_name]

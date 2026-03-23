@@ -236,8 +236,29 @@ def is_valid_ifvg(candidate, rates, bias, confirmation_index, current_price, avg
     zone_high = float(candidate["high"])
     width = max(zone_high - zone_low, point)
     min_width = max(avg_range * LTF_IFVG_MIN_WIDTH_RATIO, point * LTF_IFVG_MIN_POINTS)
+    result = {
+        "valid": False,
+        "mode": candidate["mode"],
+        "low": zone_low,
+        "high": zone_high,
+        "width": width,
+        "min_width": min_width,
+        "source_index": candidate["source_index"],
+        "origin_candle_index": candidate["origin_candle_index"],
+        "origin_candle_high": candidate["origin_candle_high"],
+        "origin_candle_low": candidate["origin_candle_low"],
+        "entry_edge": zone_high if bias == "Long" else zone_low,
+        "touch_index": None,
+        "entry_distance": None,
+        "entry_quality": None,
+        "min_entry_quality": None,
+        "clean_inversion": candidate["mode"] != "strict",
+        "post_break_confirmed": False,
+        "failure_reasons": [],
+    }
     if width < min_width:
-        return {"valid": False, "mode": candidate["mode"], "source_index": candidate["source_index"]}
+        result["failure_reasons"].append("width below minimum")
+        return result
 
     entry_distance = zone_distance(current_price, zone_low, zone_high)
     entry_quality = clamp(
@@ -249,6 +270,9 @@ def is_valid_ifvg(candidate, rates, bias, confirmation_index, current_price, avg
             point * LTF_IFVG_ENTRY_DISTANCE_MIN_POINTS,
         )
     )
+
+    result["entry_distance"] = entry_distance
+    result["entry_quality"] = entry_quality
 
     touch_index = None
     clean_inversion = candidate["mode"] != "strict"
@@ -285,21 +309,18 @@ def is_valid_ifvg(candidate, rates, bias, confirmation_index, current_price, avg
         if candidate["mode"] == "strict"
         else LTF_IFVG_INTERNAL_MIN_ENTRY_QUALITY
     )
-    entry_edge = zone_high if bias == "Long" else zone_low
+    result["touch_index"] = touch_index
+    result["clean_inversion"] = clean_inversion
+    result["post_break_confirmed"] = post_break_confirmed
+    result["min_entry_quality"] = min_entry_quality
+
+    if not clean_inversion:
+        result["failure_reasons"].append("clean inversion failed")
+    if not post_break_confirmed:
+        result["failure_reasons"].append("post-break confirmation missing")
+    if entry_quality < min_entry_quality:
+        result["failure_reasons"].append("entry quality below minimum")
+
     valid = post_break_confirmed and clean_inversion and entry_quality >= min_entry_quality
-    return {
-        "valid": valid,
-        "mode": candidate["mode"],
-        "low": zone_low,
-        "high": zone_high,
-        "width": width,
-        "source_index": candidate["source_index"],
-        "origin_candle_index": candidate["origin_candle_index"],
-        "origin_candle_high": candidate["origin_candle_high"],
-        "origin_candle_low": candidate["origin_candle_low"],
-        "entry_edge": entry_edge,
-        "touch_index": touch_index,
-        "entry_quality": entry_quality,
-        "clean_inversion": clean_inversion,
-        "post_break_confirmed": post_break_confirmed,
-    }
+    result["valid"] = valid
+    return result

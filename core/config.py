@@ -98,7 +98,7 @@ def _normalize_config(raw: dict[str, Any]) -> AppConfig:
     strict_ifvg = bool(scanner.get("strict_ifvg", True))
     ob_fvg_mode = str(scanner.get("ob_fvg_mode", "medium")).strip().lower()
     symbol_aliases_raw = scanner.get("symbol_aliases", {})
-    htf_timeframes = [str(item) for item in scanner.get("htf_timeframes", ["H1", "H4"])]
+    htf_timeframes = [str(item) for item in scanner.get("htf_timeframes", ["M30", "H1", "H4"])]
     ltf_timeframes = [str(item) for item in scanner.get("ltf_timeframes", ["M3", "M5", "M15"])]
     if symbol_aliases_raw is None:
         symbol_aliases_raw = {}
@@ -110,8 +110,8 @@ def _normalize_config(raw: dict[str, Any]) -> AppConfig:
         raise ValueError("Only 'origin_candle_extreme' is supported for sl_model in the current strategy.")
     if not strict_ifvg:
         raise ValueError("The current production strategy requires strict_iFVG=true.")
-    if any(item not in {"H1", "H4"} for item in htf_timeframes):
-        raise ValueError("Only H1 and H4 are supported for HTF scanning.")
+    if any(item not in {"M30", "H1", "H4"} for item in htf_timeframes):
+        raise ValueError("Only M30, H1, and H4 are supported for HTF scanning.")
     if any(item not in {"M3", "M5", "M15"} for item in ltf_timeframes):
         raise ValueError("Only M3, M5, and M15 are supported for LTF scanning.")
     if ob_fvg_mode not in {"strict", "medium"}:

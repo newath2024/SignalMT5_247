@@ -23,6 +23,7 @@
     ],
     "symbol_aliases": {},
     "htf_timeframes": [
+      "M30",
       "H1",
       "H4"
     ],

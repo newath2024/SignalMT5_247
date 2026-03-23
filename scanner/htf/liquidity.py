@@ -28,6 +28,10 @@ LIQUIDITY_LEVEL_TYPES = {
     "Previous Day Low",
     "Previous Week High",
     "Previous Week Low",
+    "Asia Session High",
+    "Asia Session Low",
+    "London Session High",
+    "London Session Low",
 }
 
 

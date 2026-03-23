@@ -50,8 +50,10 @@ def _context_market_bias(context: dict[str, Any] | None) -> str | None:
 def _context_priority(context: dict[str, Any] | None) -> tuple[int, int, float]:
     directional = _context_market_bias(context) in {"Long", "Short"}
     structural = not _is_liquidity_context(context)
+    rollover = bool((context or {}).get("rollover_active"))
     return (
         1 if directional else 0,
+        1 if rollover else 0,
         1 if structural else 0,
         _context_score(context),
     )
@@ -256,6 +258,114 @@ def format_ifvg_detail(payload: dict[str, Any] | None) -> str:
     if low is None or high is None:
         return "-"
     return f"iFVG {_format_price_range(low, high)}"
+
+
+def _format_failure_reason(reason: str | None, candidate: dict[str, Any] | None = None) -> str:
+    raw = str(reason or "").strip().lower()
+    if raw == "width below minimum":
+        return (
+            f"width {_format_price_value((candidate or {}).get('width'))}"
+            f" < {_format_price_value((candidate or {}).get('min_width'))}"
+        )
+    if raw == "entry quality below minimum":
+        entry_quality = (candidate or {}).get("entry_quality")
+        min_entry_quality = (candidate or {}).get("min_entry_quality")
+        if entry_quality is not None and min_entry_quality is not None:
+            return f"entry {float(entry_quality):.2f} < {float(min_entry_quality):.2f}"
+        return "entry quality too low"
+    if raw == "clean inversion failed":
+        return "clean inversion failed"
+    if raw == "post-break confirmation missing":
+        return "no post-break confirmation"
+    return str(reason or "-")
+
+
+def _format_ifvg_candidate_debug(candidate: dict[str, Any] | None) -> str:
+    if not candidate:
+        return "-"
+    range_text = _format_price_range(candidate.get("low"), candidate.get("high"))
+    parts = []
+    source_index = candidate.get("source_index")
+    if source_index is not None:
+        parts.append(f"idx {source_index}")
+    if range_text != "-":
+        parts.append(range_text)
+    failures = candidate.get("failure_reasons") or []
+    if failures:
+        parts.append(", ".join(_format_failure_reason(item, candidate) for item in failures))
+    return " | ".join(parts) if parts else "-"
+
+
+def format_rejection_debug(rejection: dict[str, Any] | None) -> str:
+    if not rejection:
+        return "-"
+    debug = rejection.get("debug") or {}
+    if not debug:
+        return "-"
+
+    lines = []
+    sweep_index = debug.get("sweep_index")
+    swept_liquidity = ", ".join(str(item) for item in debug.get("swept_liquidity") or [])
+    sweep_quality = debug.get("sweep_quality")
+    sweep_bits = []
+    if sweep_index is not None:
+        sweep_bits.append(f"sweep idx {sweep_index}")
+    if swept_liquidity:
+        sweep_bits.append(swept_liquidity)
+    if sweep_quality is not None:
+        sweep_bits.append(f"q {float(sweep_quality):.2f}")
+    if sweep_bits:
+        lines.append(" | ".join(sweep_bits))
+
+    ifvg = debug.get("ifvg") or {}
+    if ifvg:
+        range_text = _format_price_range(ifvg.get("low"), ifvg.get("high"))
+        ifvg_bits = [f"{ifvg.get('mode', 'iFVG')} {range_text}".strip()]
+        if ifvg.get("entry_quality") is not None:
+            ifvg_bits.append(f"entry {float(ifvg['entry_quality']):.2f}")
+        if ifvg.get("touch_index") is not None:
+            ifvg_bits.append(f"touch {ifvg['touch_index']}")
+        lines.append(" | ".join(bit for bit in ifvg_bits if bit and bit != "-"))
+
+    inspection = debug.get("ifvg_inspection") or {}
+    candidate_count = inspection.get("candidate_count")
+    if candidate_count is not None:
+        lines.append(f"strict candidates: {candidate_count}")
+    for candidate in (inspection.get("candidates") or [])[:3]:
+        lines.append(_format_ifvg_candidate_debug(candidate))
+
+    classification = debug.get("classification") or {}
+    if classification.get("reason"):
+        lines.append(f"classification: {classification['reason']}")
+
+    displacement = debug.get("displacement") or {}
+    if displacement and not displacement.get("valid", True):
+        parts = ["displacement invalid"]
+        if displacement.get("directional_ratio") is not None:
+            parts.append(f"dir {float(displacement['directional_ratio']):.2f}")
+        if displacement.get("move_ratio") is not None:
+            parts.append(f"move {float(displacement['move_ratio']):.2f}")
+        if displacement.get("efficiency") is not None:
+            parts.append(f"eff {float(displacement['efficiency']):.2f}")
+        lines.append(" | ".join(parts))
+
+    reclaim = debug.get("reclaim") or {}
+    if reclaim and not reclaim.get("valid", True):
+        parts = ["reclaim invalid"]
+        if reclaim.get("quality") is not None:
+            parts.append(f"q {float(reclaim['quality']):.2f}")
+        lines.append(" | ".join(parts))
+
+    ifvg_filter = debug.get("ifvg_filter") or {}
+    if ifvg_filter and not ifvg_filter.get("valid", True):
+        parts = ["iFVG filter invalid"]
+        if ifvg_filter.get("quality") is not None:
+            parts.append(f"q {float(ifvg_filter['quality']):.2f}")
+        lines.append(" | ".join(parts))
+
+    if not lines:
+        return "-"
+    return "\n".join(lines[:6])
 
 
 def _format_price_range(low: Any, high: Any) -> str:
@@ -497,6 +607,7 @@ def build_detail_payload(
         "last_detected_mss": format_mss_detail(confirmed_signal),
         "last_detected_ifvg": format_ifvg_detail(source),
         "rejection_reason": describe_rejection(rejection.get("reason")) if rejection else "-",
+        "rejection_debug": format_rejection_debug(rejection),
         "last_alert_time": None,
         "last_alert_details": "-",
         "cooldown_info": None,

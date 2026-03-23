@@ -218,6 +218,7 @@ class ScanService:
                     "last_detected_mss": "-",
                     "last_detected_ifvg": "-",
                     "rejection_reason": "-",
+                    "rejection_debug": "-",
                     "last_alert_time": None,
                     "last_alert_details": "-",
                     "cooldown_info": "-",

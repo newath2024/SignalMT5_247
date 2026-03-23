@@ -67,7 +67,7 @@ def detect_watch_candidates(snapshot, contexts, trigger_timeframes):
             continue
 
         for timeframe_name in trigger_timeframes:
-            trigger, rejection_reason = detect_ltf_watch_trigger(
+            trigger, rejection = detect_ltf_watch_trigger(
                 snapshot["rates"][timeframe_name],
                 bias,
                 snapshot["current_price"],
@@ -77,14 +77,15 @@ def detect_watch_candidates(snapshot, contexts, trigger_timeframes):
                 context,
             )
             if trigger is None:
-                if rejection_reason:
+                if rejection:
                     rejections.append(
                         {
                             "symbol": snapshot["symbol"],
                             "timeframe": timeframe_name,
                             "bias": bias,
                             "phase": "watch",
-                            "reason": rejection_reason,
+                            "reason": rejection.get("reason"),
+                            "debug": rejection.get("debug"),
                         }
                     )
                 continue

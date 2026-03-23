@@ -22,6 +22,7 @@ def launch_desktop(controller, auto_start: bool = True):
             QHBoxLayout,
             QHeaderView,
             QLabel,
+            QLineEdit,
             QMainWindow,
             QMessageBox,
             QPushButton,
@@ -198,6 +199,8 @@ def launch_desktop(controller, auto_start: bool = True):
             self.log_filter.addItem("All", "all")
             self.log_filter.addItem("Signals Only", "signals")
             self.log_filter.addItem("Warnings / Errors", "warnings")
+            self.log_symbol_filter = QLineEdit()
+            self.log_symbol_filter.setPlaceholderText("Filter by pair, symbol, or text")
 
             self.inspector_fields = {}
             self.metric_cards = {
@@ -382,6 +385,7 @@ def launch_desktop(controller, auto_start: bool = True):
                     ("zone_top_bottom", "Entry Zone"),
                     ("last_alert_time", "Last Alert"),
                     ("rejection_reason", "Rejection"),
+                    ("rejection_debug", "Why Rejected"),
                 ),
             )
             inspector_layout.addStretch(1)
@@ -434,6 +438,8 @@ def launch_desktop(controller, auto_start: bool = True):
             filter_row = QHBoxLayout()
             filter_row.addWidget(QLabel("Filter"))
             filter_row.addWidget(self.log_filter)
+            filter_row.addWidget(QLabel("Search"))
+            filter_row.addWidget(self.log_symbol_filter, 1)
             filter_row.addStretch(1)
             inner.addLayout(filter_row)
 
@@ -494,6 +500,7 @@ def launch_desktop(controller, auto_start: bool = True):
             self.export_log_button.clicked.connect(self.export_logs)
             self.ob_fvg_mode_combo.currentIndexChanged.connect(self.change_ob_fvg_mode)
             self.log_filter.currentIndexChanged.connect(self.refresh_activity_log)
+            self.log_symbol_filter.textChanged.connect(self.refresh_activity_log)
             self.actionable_only_checkbox.stateChanged.connect(self._refresh_symbol_table_view)
             self.symbol_table.itemSelectionChanged.connect(self.update_symbol_inspector)
 
@@ -769,15 +776,24 @@ def launch_desktop(controller, auto_start: bool = True):
             if not self._last_snapshot:
                 return
             filter_key = self.log_filter.currentData()
+            query = self.log_symbol_filter.text().strip().lower()
             lines = []
             for entry in self._last_snapshot["logs"]:
                 if not log_matches_filter(entry, filter_key):
                     continue
+                if query:
+                    search_blob = " ".join(
+                        str(entry.get(key) or "").lower()
+                        for key in ("symbol", "timeframe", "message", "phase", "reason")
+                    )
+                    if query not in search_blob:
+                        continue
                 suffix = ""
                 if entry.get("reason"):
                     suffix = f" | reason={entry['reason']}"
+                timestamp = str(entry.get("label") or format_timestamp(entry.get("timestamp")) or "-")
                 lines.append(
-                    f"[{entry['level']}] {entry['symbol']} {entry['timeframe']} {entry['message']} | "
+                    f"{timestamp} [{entry['level']}] {entry['symbol']} {entry['timeframe']} {entry['message']} | "
                     f"phase={entry['phase']}{suffix}"
                 )
             self.log_view.setPlainText("\n".join(lines[-150:]))
@@ -806,6 +822,7 @@ def launch_desktop(controller, auto_start: bool = True):
             detail["last_detected_ifvg"] = self._format_detail_text(detail.get("last_detected_ifvg"))
             detail["active_watch_info"] = self._format_detail_text(detail.get("active_watch_info"))
             detail["rejection_reason"] = self._format_detail_text(detail.get("rejection_reason"))
+            detail["rejection_debug"] = self._format_detail_text(detail.get("rejection_debug"))
             detail["timeline"] = self._format_detail_text(detail.get("timeline"))
             detail["zone"] = self._format_detail_text(detail.get("zone"))
             detail["zone_top_bottom"] = self._format_detail_text(detail.get("zone_top_bottom"))
@@ -835,6 +852,10 @@ def launch_desktop(controller, auto_start: bool = True):
                 .replace("Previous Day Low", "PDL")
                 .replace("Previous Week High", "PWH")
                 .replace("Previous Week Low", "PWL")
+                .replace("Asia Session High", "ASH")
+                .replace("Asia Session Low", "ASL")
+                .replace("London Session High", "LOH")
+                .replace("London Session Low", "LOL")
             )
 
         def _format_structure_note(self, payload: dict | None, detail: dict) -> str:

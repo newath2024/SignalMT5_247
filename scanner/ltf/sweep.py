@@ -38,9 +38,11 @@ from ..config.ltf import (
 )
 from ..patterns.ifvg import (
     find_first_touch_after_creation as detect_first_touch_after_creation,
+    find_ifvg_candidates as detect_ifvg_candidates,
     find_ifvg_zone as detect_ifvg_zone,
     is_clean_ifvg_inversion as validate_ifvg_inversion,
 )
+from ..patterns.validators import is_valid_ifvg
 from ..utils import average_range, body_strength, clamp
 
 
@@ -62,6 +64,134 @@ def find_ifvg_zone(rates, bias, sweep_index, mss_index, current_price, avg_range
         avg_range,
         point,
     )
+
+
+def _round_debug(value, digits=3):
+    if value is None:
+        return None
+    try:
+        return round(float(value), digits)
+    except (TypeError, ValueError):
+        return value
+
+
+def _ifvg_debug_candidate(validation):
+    return {
+        "mode": validation.get("mode"),
+        "source_index": validation.get("source_index"),
+        "origin_candle_index": validation.get("origin_candle_index"),
+        "low": _round_debug(validation.get("low"), 5),
+        "high": _round_debug(validation.get("high"), 5),
+        "width": _round_debug(validation.get("width"), 5),
+        "min_width": _round_debug(validation.get("min_width"), 5),
+        "entry_distance": _round_debug(validation.get("entry_distance"), 5),
+        "entry_quality": _round_debug(validation.get("entry_quality")),
+        "min_entry_quality": _round_debug(validation.get("min_entry_quality")),
+        "touch_index": validation.get("touch_index"),
+        "clean_inversion": validation.get("clean_inversion"),
+        "post_break_confirmed": validation.get("post_break_confirmed"),
+        "failure_reasons": list(validation.get("failure_reasons") or []),
+    }
+
+
+def _inspect_ifvg_candidates(rates, bias, sweep_candidate, current_price, point):
+    candidates = []
+    for candidate in detect_ifvg_candidates(
+        rates,
+        bias,
+        sweep_candidate["sweep_index"],
+        len(rates) - 1,
+    ):
+        validation = is_valid_ifvg(
+            candidate,
+            rates,
+            bias,
+            len(rates) - 1,
+            current_price,
+            sweep_candidate["avg_range"],
+            point,
+        )
+        if validation.get("mode") != "strict":
+            continue
+        candidates.append(_ifvg_debug_candidate(validation))
+
+    candidates.sort(
+        key=lambda item: (
+            item.get("source_index") or -1,
+            item.get("entry_quality") if item.get("entry_quality") is not None else -1.0,
+            item.get("width") if item.get("width") is not None else -1.0,
+        ),
+        reverse=True,
+    )
+    return {
+        "candidate_count": len(candidates),
+        "candidates": candidates[:3],
+    }
+
+
+def _build_rejection_debug(
+    sweep_candidate,
+    ifvg=None,
+    rejection_reason=None,
+    ifvg_inspection=None,
+    reclaim=None,
+    displacement=None,
+    ifvg_filter=None,
+    classification=None,
+):
+    debug = {
+        "type": "watch_rejection",
+        "reason": rejection_reason,
+        "sweep_index": sweep_candidate.get("sweep_index"),
+        "swept_liquidity": list(sweep_candidate.get("swept_external") or []),
+        "sweep_quality": _round_debug(sweep_candidate.get("sweep_quality")),
+        "structure_level": _round_debug(sweep_candidate.get("structure_level"), 5),
+        "sweep_level": _round_debug(sweep_candidate.get("sweep_level"), 5),
+    }
+    if ifvg is not None:
+        debug["ifvg"] = {
+            "mode": ifvg.get("mode"),
+            "source_index": ifvg.get("source_index"),
+            "low": _round_debug(ifvg.get("low"), 5),
+            "high": _round_debug(ifvg.get("high"), 5),
+            "quality": _round_debug(ifvg.get("quality")),
+            "entry_quality": _round_debug(ifvg.get("entry_quality")),
+            "touch_index": ifvg.get("touch_index"),
+            "post_break_confirmed": bool(ifvg.get("post_break_confirmed")),
+        }
+    if ifvg_inspection is not None:
+        debug["ifvg_inspection"] = ifvg_inspection
+    if reclaim is not None:
+        debug["reclaim"] = {
+            "valid": bool(reclaim.get("valid")),
+            "quality": _round_debug(reclaim.get("quality")),
+            "reclaim_distance": _round_debug(reclaim.get("reclaim_distance"), 5),
+            "hold_distance": _round_debug(reclaim.get("hold_distance"), 5),
+        }
+    if displacement is not None:
+        debug["displacement"] = {
+            "valid": bool(displacement.get("valid")),
+            "quality": _round_debug(displacement.get("quality")),
+            "bars": displacement.get("bars"),
+            "strong_bars": displacement.get("strong_bars"),
+            "opposite_bars": displacement.get("opposite_bars"),
+            "directional_ratio": _round_debug(displacement.get("directional_ratio")),
+            "move_ratio": _round_debug(displacement.get("move_ratio")),
+            "efficiency": _round_debug(displacement.get("efficiency")),
+        }
+    if ifvg_filter is not None:
+        debug["ifvg_filter"] = {
+            "valid": bool(ifvg_filter.get("valid")),
+            "quality": _round_debug(ifvg_filter.get("quality")),
+            "width_to_span": _round_debug(ifvg_filter.get("width_to_span")),
+            "origin_body": _round_debug(ifvg_filter.get("origin_body")),
+        }
+    if classification is not None:
+        debug["classification"] = {
+            "type": classification.get("type"),
+            "reason": classification.get("reason"),
+        }
+    return debug
 
 
 def find_swept_external_liquidity(bias, sweep_high, sweep_low, sweep_close, reference_levels, point):
@@ -394,21 +524,44 @@ def detect_ltf_watch_trigger(rates, bias, current_price, point, timeframe_name, 
             rejection_reason = "no strict iFVG"
             rejection_score = sweep_candidate["sweep_quality"]
             if rejection_score > best_rejection_score:
-                best_rejection = rejection_reason
+                best_rejection = {
+                    "reason": rejection_reason,
+                    "debug": _build_rejection_debug(
+                        sweep_candidate,
+                        rejection_reason=rejection_reason,
+                        ifvg_inspection=_inspect_ifvg_candidates(rates, bias, sweep_candidate, current_price, point),
+                    ),
+                }
                 best_rejection_score = rejection_score
             continue
         if ifvg["mode"] != "strict" or ifvg["entry_quality"] < LTF_IFVG_ENTRY_MIN_QUALITY:
             rejection_reason = "iFVG not strict enough"
             rejection_score = sweep_candidate["sweep_quality"] + ifvg.get("quality", 0.0)
             if rejection_score > best_rejection_score:
-                best_rejection = rejection_reason
+                best_rejection = {
+                    "reason": rejection_reason,
+                    "debug": _build_rejection_debug(
+                        sweep_candidate,
+                        ifvg=ifvg,
+                        rejection_reason=rejection_reason,
+                        ifvg_inspection=_inspect_ifvg_candidates(rates, bias, sweep_candidate, current_price, point),
+                    ),
+                }
                 best_rejection_score = rejection_score
             continue
         if ifvg.get("touch_index") is None or ifvg["touch_index"] <= sweep_candidate["sweep_index"]:
             rejection_reason = "iFVG inversion not confirmed"
             rejection_score = sweep_candidate["sweep_quality"] + ifvg.get("quality", 0.0)
             if rejection_score > best_rejection_score:
-                best_rejection = rejection_reason
+                best_rejection = {
+                    "reason": rejection_reason,
+                    "debug": _build_rejection_debug(
+                        sweep_candidate,
+                        ifvg=ifvg,
+                        rejection_reason=rejection_reason,
+                        ifvg_inspection=_inspect_ifvg_candidates(rates, bias, sweep_candidate, current_price, point),
+                    ),
+                }
                 best_rejection_score = rejection_score
             continue
 
@@ -430,7 +583,18 @@ def detect_ltf_watch_trigger(rates, bias, current_price, point, timeframe_name, 
                 + reclaim.get("quality", 0.0)
             )
             if rejection_score > best_rejection_score:
-                best_rejection = classification["reason"] or "continuation sweep"
+                best_rejection = {
+                    "reason": classification["reason"] or "continuation sweep",
+                    "debug": _build_rejection_debug(
+                        sweep_candidate,
+                        ifvg=ifvg,
+                        rejection_reason=classification["reason"] or "continuation sweep",
+                        reclaim=reclaim,
+                        displacement=displacement,
+                        ifvg_filter=ifvg_filter,
+                        classification=classification,
+                    ),
+                }
                 best_rejection_score = rejection_score
             continue
 
@@ -444,7 +608,18 @@ def detect_ltf_watch_trigger(rates, bias, current_price, point, timeframe_name, 
                 + displacement.get("quality", 0.0)
             )
             if rejection_score > best_rejection_score:
-                best_rejection = rejection_reason
+                best_rejection = {
+                    "reason": rejection_reason,
+                    "debug": _build_rejection_debug(
+                        sweep_candidate,
+                        ifvg=ifvg,
+                        rejection_reason=rejection_reason,
+                        reclaim=reclaim,
+                        displacement=displacement,
+                        ifvg_filter=ifvg_filter,
+                        classification=classification,
+                    ),
+                }
                 best_rejection_score = rejection_score
             continue
 

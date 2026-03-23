@@ -1,5 +1,8 @@
 from ..config.htf import (
     HTF_PREVIOUS_DAY_QUALITY,
+    HTF_SESSION_ASIA_QUALITY,
+    HTF_SESSION_BAND_MULTIPLIER,
+    HTF_SESSION_LONDON_QUALITY,
     HTF_PREVIOUS_WEEK_BAND_MULTIPLIER,
     HTF_PREVIOUS_WEEK_QUALITY,
     HTF_REFERENCE_BAND_H1_RATIO,
@@ -113,9 +116,45 @@ def build_previous_levels(rates_d1, rates_w1, band):
     return zones
 
 
+def build_session_levels(reference_levels, band):
+    zones = []
+    if not reference_levels:
+        return zones
+
+    session_band = float(band) * HTF_SESSION_BAND_MULTIPLIER
+    session_specs = (
+        ("ASH", "Asia Session High", HTF_SESSION_ASIA_QUALITY),
+        ("ASL", "Asia Session Low", HTF_SESSION_ASIA_QUALITY),
+        ("LOH", "London Session High", HTF_SESSION_LONDON_QUALITY),
+        ("LOL", "London Session Low", HTF_SESSION_LONDON_QUALITY),
+    )
+    for reference_key, label, quality in session_specs:
+        level = reference_levels.get(reference_key)
+        if level is None:
+            continue
+        zones.append(
+            make_zone(
+                label=label,
+                timeframe="SESSION",
+                zone_type=label,
+                bias="Neutral",
+                low=level,
+                high=level,
+                quality=quality,
+                is_liquidity_level=True,
+                liquidity_level=float(level),
+                tolerance=session_band,
+                reference_key=reference_key,
+            )
+        )
+
+    return zones
+
+
 def build_htf_zones(snapshot):
     rates = snapshot["rates"]
     point = snapshot["point"]
+    avg_m30 = average_range(rates["M30"], 20)
     avg_h1 = average_range(rates["H1"], 20)
     avg_h4 = average_range(rates["H4"], 20)
     reference_band = max(
@@ -125,9 +164,12 @@ def build_htf_zones(snapshot):
     )
 
     zones = []
+    zones.extend(find_order_blocks(rates["M30"], "M30", avg_m30, point))
     zones.extend(find_order_blocks(rates["H1"], "H1", avg_h1, point))
     zones.extend(find_order_blocks(rates["H4"], "H4", avg_h4, point))
+    zones.extend(find_fvgs(rates["M30"], "M30", avg_m30, point))
     zones.extend(find_fvgs(rates["H1"], "H1", avg_h1, point))
     zones.extend(find_fvgs(rates["H4"], "H4", avg_h4, point))
+    zones.extend(build_session_levels(snapshot.get("reference_levels") or {}, reference_band))
     zones.extend(build_previous_levels(rates["D1"], rates["W1"], reference_band))
     return zones

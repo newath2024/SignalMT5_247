@@ -14,7 +14,7 @@ from .state.session_state import build_timeframe_signature, get_symbol_state
 from .state.watch_cache import get_watch_cache_count, get_watch_cache_file
 from .utils import log
 
-HTF_SIGNATURE_FRAMES = ("H4", "H1", "D1", "W1")
+HTF_SIGNATURE_FRAMES = ("H4", "H1", "M30", "D1", "W1")
 LTF_SIGNATURE_FRAMES = ("M15", "M5", "M3")
 
 

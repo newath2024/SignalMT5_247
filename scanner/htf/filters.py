@@ -25,10 +25,13 @@ from ..utils import average_range, clamp, zone_distance, zone_mid, zone_width
 
 
 def determine_htf_structure(snapshot):
+    rates_m30 = snapshot["rates"]["M30"]
     rates_h1 = snapshot["rates"]["H1"]
     rates_h4 = snapshot["rates"]["H4"]
+    avg_m30 = average_range(rates_m30, 20)
     avg_h1 = average_range(rates_h1, 20)
     avg_h4 = average_range(rates_h4, 20)
+    m30_structure = summarize_market_structure(rates_m30, avg_m30)
     h1_structure = summarize_market_structure(rates_h1, avg_h1)
     h4_structure = summarize_market_structure(rates_h4, avg_h4)
 
@@ -38,6 +41,9 @@ def determine_htf_structure(snapshot):
     elif h1_structure["clear"]:
         trend = h1_structure["trend"]
         clear = trend != "Range"
+    elif m30_structure["clear"]:
+        trend = m30_structure["trend"]
+        clear = trend != "Range"
     else:
         trend = "Range"
         clear = False
@@ -45,6 +51,7 @@ def determine_htf_structure(snapshot):
     return {
         "trend": trend,
         "clear": clear,
+        "M30": m30_structure,
         "H1": h1_structure,
         "H4": h4_structure,
     }
@@ -125,6 +132,7 @@ def _zone_invalidation_status(zone, rates, current_index) -> tuple[bool, str | N
 def evaluate_htf_zone(zone, snapshot, structure=None):
     price = snapshot["current_price"]
     point = snapshot["point"]
+    rates_m30 = snapshot["rates"]["M30"]
     rates_h1 = snapshot["rates"]["H1"]
     rates_h4 = snapshot["rates"]["H4"]
     avg_h1 = average_range(rates_h1, 20)
@@ -133,7 +141,13 @@ def evaluate_htf_zone(zone, snapshot, structure=None):
     if is_liquidity_level(zone):
         return evaluate_liquidity_level(zone, snapshot, structure=structure)
 
-    zone_rates = rates_h4 if zone["timeframe"] == "H4" else rates_h1
+    zone_timeframe = str(zone.get("timeframe") or "H1")
+    zone_rates_map = {
+        "M30": rates_m30,
+        "H1": rates_h1,
+        "H4": rates_h4,
+    }
+    zone_rates = zone_rates_map.get(zone_timeframe, rates_h1)
     zone_valid, invalidation_reason = _zone_invalidation_status(zone, zone_rates, len(zone_rates) - 1)
     is_fvg_zone = str(zone.get("type") or "").upper() == "FVG"
 
@@ -152,11 +166,8 @@ def evaluate_htf_zone(zone, snapshot, structure=None):
             "invalidation_reason": invalidation_reason,
         }
 
-    recent_bars = (
-        rates_h4[-HTF_EVALUATION_RECENT_BARS["H4"] :]
-        if zone["timeframe"] == "H4"
-        else rates_h1[-HTF_EVALUATION_RECENT_BARS["H1"] :]
-    )
+    recent_bar_count = int(HTF_EVALUATION_RECENT_BARS.get(zone_timeframe, HTF_EVALUATION_RECENT_BARS["H1"]))
+    recent_bars = zone_rates[-recent_bar_count:]
     tolerance = max(
         zone_width(zone) * HTF_TOLERANCE_ZONE_WIDTH_RATIO,
         avg_h1 * HTF_TOLERANCE_AVG_H1_RATIO,

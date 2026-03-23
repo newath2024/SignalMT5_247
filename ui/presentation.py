@@ -112,6 +112,10 @@ LIQUIDITY_SHORT_LABELS = {
     "Previous Day Low": "PDL",
     "Previous Week High": "PWH",
     "Previous Week Low": "PWL",
+    "Asia Session High": "ASH",
+    "Asia Session Low": "ASL",
+    "London Session High": "LOH",
+    "London Session Low": "LOL",
 }
 
 

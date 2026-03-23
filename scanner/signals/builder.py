@@ -75,7 +75,13 @@ def build_signal(snapshot, context, trigger, trigger_timeframe, all_htf_zones):
         "session_note": scoring["session_note"],
         "actionability": execution["actionability"],
         "htf_zone": context["zone"],
-        "htf_chart_timeframe": "H4" if context["zone"]["timeframe"] in ("H4", "W1") else "H1",
+        "htf_chart_timeframe": (
+            "H4"
+            if context["zone"]["timeframe"] in ("H4", "W1")
+            else "M30"
+            if context["zone"]["timeframe"] == "M30"
+            else "H1"
+        ),
         "sweep_index": trigger["sweep_index"],
         "sweep_price": trigger["sweep_level"],
         "mss_index": trigger["mss_index"],

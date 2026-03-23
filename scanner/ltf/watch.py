@@ -64,7 +64,7 @@ def detect_watch_setup(snapshot, all_htf_zones, contexts):
             continue
 
         for timeframe_name in TRIGGER_TIMEFRAMES:
-            trigger, rejection_reason = detect_ltf_watch_trigger(
+            trigger, rejection = detect_ltf_watch_trigger(
                 snapshot["rates"][timeframe_name],
                 bias,
                 snapshot["current_price"],
@@ -74,10 +74,10 @@ def detect_watch_setup(snapshot, all_htf_zones, contexts):
                 context,
             )
             if trigger is None:
-                if rejection_reason:
+                if rejection:
                     notify_once(
-                        f"watch-reject:{snapshot['symbol']}:{timeframe_name}:{bias}:{rejection_reason}",
-                        f"{snapshot['symbol']} {timeframe_name} {bias} rejected: {rejection_reason}",
+                        f"watch-reject:{snapshot['symbol']}:{timeframe_name}:{bias}:{rejection['reason']}",
+                        f"{snapshot['symbol']} {timeframe_name} {bias} rejected: {rejection['reason']}",
                     )
                 continue
 
