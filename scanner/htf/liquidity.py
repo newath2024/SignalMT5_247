@@ -107,6 +107,28 @@ def _liquidity_recent_slice(zone, rates_h1):
     return start_index, rates_h1[start_index:]
 
 
+def _append_live_h1_interaction(
+    touched_indices: list[int],
+    swept_indices: list[int],
+    *,
+    live_h1_candle,
+    live_index: int,
+    level: float,
+    side: str,
+    tolerance: float,
+    sweep_buffer: float,
+):
+    if live_h1_candle is None:
+        return
+
+    candle_high = float(live_h1_candle["high"])
+    candle_low = float(live_h1_candle["low"])
+    if _touched_level(level, side, candle_high, candle_low, tolerance):
+        touched_indices.append(live_index)
+    if _swept_level(level, side, candle_high, candle_low, sweep_buffer):
+        swept_indices.append(live_index)
+
+
 def _touched_level(level: float, side: str, candle_high: float, candle_low: float, tolerance: float) -> bool:
     if side == "low":
         return candle_low <= level + tolerance
@@ -194,6 +216,7 @@ def _trend_alignment(structure: dict, bias: str | None) -> str:
 
 def evaluate_liquidity_level(zone, snapshot, structure=None):
     rates_h1 = snapshot["rates"]["H1"]
+    live_h1_candle = (snapshot.get("live_candles") or {}).get("H1")
     point = float(snapshot["point"])
     price = float(snapshot["current_price"])
     avg_h1 = average_range(rates_h1, 20)
@@ -234,6 +257,17 @@ def evaluate_liquidity_level(zone, snapshot, structure=None):
             touched_indices.append(index)
         if _swept_level(level, side, candle_high, candle_low, sweep_buffer):
             swept_indices.append(index)
+
+    _append_live_h1_interaction(
+        touched_indices,
+        swept_indices,
+        live_h1_candle=live_h1_candle,
+        live_index=len(rates_h1),
+        level=level,
+        side=side,
+        tolerance=tolerance,
+        sweep_buffer=sweep_buffer,
+    )
 
     tap_index = touched_indices[-1] if touched_indices else None
     sweep_index = swept_indices[-1] if swept_indices else None

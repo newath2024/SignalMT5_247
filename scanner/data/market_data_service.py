@@ -2,7 +2,7 @@ import datetime as dt
 
 from ..config import ASIA_SESSION_UTC, HISTORY_BARS, LONDON_SESSION_UTC, TIMEFRAME_MAP
 from ..deps import mt5
-from .mt5_client import ensure_symbol_ready, get_candles, get_current_price, get_symbol_tick
+from .mt5_client import ensure_symbol_ready, get_candles, get_current_price, get_live_candle, get_symbol_tick
 
 
 def infer_server_utc_offset_hours(tick):
@@ -110,6 +110,13 @@ def build_symbol_snapshot(symbol):
             return None
         rates_by_name[name] = rates
 
+    live_candles = {}
+    for name in ("H1",):
+        timeframe = TIMEFRAME_MAP[name]
+        live_candle = get_live_candle(symbol, timeframe)
+        if live_candle is not None:
+            live_candles[name] = live_candle
+
     tick = get_symbol_tick(symbol)
     current_price = get_current_price(symbol, rates_by_name["M5"][-1]["close"])
     point = float(info.point) if info.point else 0.00001
@@ -132,6 +139,7 @@ def build_symbol_snapshot(symbol):
         "point": point,
         "current_price": current_price,
         "rates": rates_by_name,
+        "live_candles": live_candles,
         "broker_now": broker_now,
         "server_utc_offset_hours": server_utc_offset_hours,
         "reference_levels": reference_levels,

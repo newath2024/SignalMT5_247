@@ -12,6 +12,27 @@ def _context_market_bias(evaluated):
     return None
 
 
+def _liquidity_context_rank(evaluated):
+    zone = evaluated.get("zone") or {}
+    is_liquidity = bool(zone.get("is_liquidity_level")) or bool(evaluated.get("is_liquidity_level"))
+    if not is_liquidity:
+        return -1
+
+    timeframe = str(zone.get("timeframe") or "").upper()
+    reference_key = str(zone.get("reference_key") or "").upper()
+    if timeframe == "W1":
+        return 30
+    if timeframe == "D1":
+        return 20
+    if timeframe == "SESSION":
+        if reference_key in {"LOH", "LOL"}:
+            return 12
+        if reference_key in {"ASH", "ASL"}:
+            return 10
+        return 10
+    return 0
+
+
 def _context_priority(evaluated):
     zone = evaluated.get("zone") or {}
     is_liquidity = bool(zone.get("is_liquidity_level")) or bool(evaluated.get("is_liquidity_level"))
@@ -21,6 +42,7 @@ def _context_priority(evaluated):
         1 if directional else 0,
         1 if rollover else 0,
         0 if is_liquidity else 1,
+        _liquidity_context_rank(evaluated),
         float(evaluated.get("score") or 0.0),
         _interaction_index(evaluated),
     )
@@ -132,7 +154,7 @@ def _find_rollover_contexts(evaluated_items, structure):
                 extreme_value = float(level) if target_side == "high" else -float(level)
             return (
                 _rollover_interaction_bonus(item),
-                _rollover_session_bonus(item),
+                _liquidity_context_rank(item),
                 _interaction_index(item),
                 extreme_value,
                 float(item.get("distance_score") or 0.0),
