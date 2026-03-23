@@ -132,7 +132,7 @@ Copy the entire project folder, including:
 - source files
 - `.venv` or `python_embedded`
 - `mt5_portable`
-- `.env` if you use Telegram secrets there
+- `.env` if you use Telegram secrets there, but transfer it privately and do not publish it with the bundle
 - `portable.env`
 - `run.bat`, `restart_bot.bat`, `first_run_check.bat`
 
@@ -145,10 +145,11 @@ The app can still reuse the root `.env` on first run because the runtime loader 
 On the destination Windows PC or VPS:
 
 1. Copy the whole folder
-2. Double-click `run.bat`
-3. Wait for MT5 to launch
-4. If a saved session exists, the bot will start automatically
-5. If the bot crashes, `restart_bot.bat` will restart it
+2. If you use Telegram alerts, create `.env` from `.env.example` and fill in the real token/chat id privately
+3. Double-click `run.bat`
+4. Wait for MT5 to launch
+5. If a saved session exists, the bot will start automatically
+6. If the bot crashes, `restart_bot.bat` will restart it
 
 ## Runtime paths in portable mode
 
@@ -226,3 +227,4 @@ This verifies:
 - MT5 saved login portability depends on what the broker terminal stores in portable mode; most of the time copying the full portable folder is enough, but some brokers/builds may still require one manual login on the new machine
 - a copied `.venv` is not guaranteed to be portable across all Windows machines
 - hiding MT5 is riskier than minimizing it, so `normal` or `minimize` is safer for production
+- the real Telegram `.env` is not bundled automatically anymore; this is intentional to reduce secret leakage risk

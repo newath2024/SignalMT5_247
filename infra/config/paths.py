@@ -59,10 +59,11 @@ def ensure_runtime_layout():
     if not USER_CONFIG_FILE.exists() and USER_CONFIG_TEMPLATE.exists():
         shutil.copyfile(USER_CONFIG_TEMPLATE, USER_CONFIG_FILE)
 
-    if not ENV_FILE.exists():
-        for candidate in legacy_env_candidates():
-            if candidate.exists():
-                shutil.copyfile(candidate, ENV_FILE)
-                break
+    env_candidates = [candidate for candidate in legacy_env_candidates() if candidate.exists()]
+    if env_candidates:
+        source_env = env_candidates[0]
+        should_sync_source_env = not getattr(sys, "frozen", False)
+        if should_sync_source_env or not ENV_FILE.exists():
+            shutil.copyfile(source_env, ENV_FILE)
 
     return APP_HOME

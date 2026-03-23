@@ -1,4 +1,7 @@
+# Local secrets
 .env
+.env.*
+!.env.example
 watch_cache.json
 alert_cache.json
 __pycache__/

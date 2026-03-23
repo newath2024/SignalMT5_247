@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 $python = (& py -3.12 -c "import sys; print(sys.executable)").Trim()
 $specFile = Join-Path $root "packaging\OpenClawScanner.spec"
-$envFile = Join-Path $root ".env"
+$envExampleFile = Join-Path $root ".env.example"
 $notesFile = Join-Path $root "PORTABLE_SETUP.txt"
 $iconFile = Join-Path $root "assets\liquidity_sniper.ico"
 $iconPngFile = Join-Path $root "assets\liquidity_sniper_icon.png"
@@ -22,8 +22,8 @@ if (-not (Test-Path $distDir)) {
   throw "Portable output folder was not created: $distDir"
 }
 
-if (Test-Path $envFile) {
-  Copy-Item $envFile (Join-Path $distDir ".env") -Force
+if (Test-Path $envExampleFile) {
+  Copy-Item $envExampleFile (Join-Path $distDir ".env.example") -Force
 }
 
 if (Test-Path $notesFile) {

@@ -113,7 +113,13 @@ prepare_portable.md
 
 - Default config: [`config/default.json`](./config/default.json)
 - User override: [`config/user.json`](./config/user.json)
-- Secrets: `.env`
+- Secrets: local `.env` created from [`.env.example`](./.env.example)
+
+Security note:
+
+- `.env` is intentionally ignored by git and should never be committed.
+- Build outputs no longer bundle the real `.env` file into `dist/` or the installer.
+- Provision Telegram secrets privately on the target machine after deployment.
 
 Current config assumptions:
 
@@ -167,6 +173,8 @@ Outputs:
 
 - Portable: [`dist/OpenClawScanner/`](./dist/OpenClawScanner)
 - Installer: [`dist/installer/OpenClawScannerSetup.exe`](./dist/installer/OpenClawScannerSetup.exe)
+
+The build includes `.env.example` for reference only. Real secrets must be supplied privately as `.env` after deployment.
 
 ## Notes
 
