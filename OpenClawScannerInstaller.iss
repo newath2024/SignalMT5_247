@@ -1,4 +1,4 @@
-#define MyAppName "OpenClaw Scanner"
+#define MyAppName "Liquidity Sniper"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "OpenClaw"
 #define MyAppExeName "OpenClawScanner.exe"
@@ -9,7 +9,7 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={localappdata}\Programs\OpenClaw Scanner
+DefaultDirName={localappdata}\Programs\Liquidity Sniper
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
@@ -17,7 +17,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=dist\installer
 OutputBaseFilename=OpenClawScannerSetup
-SetupIconFile=assets\openclaw.ico
+SetupIconFile=assets\liquidity_sniper.ico
 WizardStyle=modern
 WizardImageFile=assets\installer_wizard.bmp
 WizardSmallImageFile=assets\installer_small.bmp
@@ -38,9 +38,9 @@ Source: "dist\OpenClawScanner\.env"; DestDir: "{app}"; Flags: onlyifdoesntexist 
 Source: "dist\OpenClawScanner\*"; DestDir: "{app}"; Excludes: ".env"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\openclaw.ico"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\openclaw.ico"
-Name: "{autoprograms}\Reset OpenClaw State"; Filename: "{app}\ResetScannerState.bat"; IconFilename: "{app}\openclaw.ico"
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\liquidity_sniper.ico"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\liquidity_sniper.ico"
+Name: "{autoprograms}\Reset Liquidity Sniper State"; Filename: "{app}\ResetScannerState.bat"; IconFilename: "{app}\liquidity_sniper.ico"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent

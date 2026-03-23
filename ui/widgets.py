@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Iterable
 
 from PySide6.QtCore import QRectF, QSize, Qt
-from PySide6.QtGui import QFont, QFontDatabase, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QFont, QFontDatabase, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -24,16 +24,23 @@ from PySide6.QtWidgets import (
 )
 
 from .theme import (
+    ACCENT_CYAN,
+    ACCENT_GREEN,
+    ACCENT_RED,
+    BACKGROUND_CARD_ALT,
+    BORDER_STRONG,
     MONO_FONT_FAMILY,
     SPACE_1,
     SPACE_2,
     SPACE_3,
     SPACE_4,
     SPACE_5,
+    TEXT_SECONDARY,
     TEXT_TERTIARY,
     badge_palette,
     badge_stylesheet,
     css_color,
+    rgba,
 )
 
 
@@ -45,6 +52,110 @@ def _monospace_font(point_size: int = 9) -> QFont:
     font.setFamilies([MONO_FONT_FAMILY, font.family()])
     font.setPointSize(point_size)
     return font
+
+
+def _draw_brand_mark(painter: QPainter, rect: QRectF) -> None:
+    painter.save()
+    painter.setRenderHint(QPainter.Antialiasing, True)
+
+    size = min(rect.width(), rect.height())
+    pad = size * 0.08
+    canvas = rect.adjusted(pad, pad, -pad, -pad)
+
+    shell = QPainterPath()
+    shell.addRoundedRect(canvas, size * 0.18, size * 0.18)
+    painter.fillPath(shell, css_color(BACKGROUND_CARD_ALT))
+    painter.setPen(QPen(css_color(rgba(BORDER_STRONG, 0.75)), max(1.0, size * 0.02)))
+    painter.drawPath(shell)
+
+    center = canvas.center()
+    ring_radius = size * 0.24
+    ring_pen = QPen(css_color(rgba(ACCENT_CYAN, 0.78)), max(1.4, size * 0.04))
+    ring_pen.setCapStyle(Qt.RoundCap)
+    painter.setPen(ring_pen)
+    painter.setBrush(Qt.NoBrush)
+    painter.drawEllipse(center, ring_radius, ring_radius)
+
+    cross_pen = QPen(css_color(rgba(ACCENT_CYAN, 0.34)), max(1.0, size * 0.028))
+    cross_pen.setCapStyle(Qt.RoundCap)
+    painter.setPen(cross_pen)
+    cross_span = ring_radius * 1.28
+    cross_gap = ring_radius * 0.46
+    painter.drawLine(
+        center.x() - cross_span,
+        center.y(),
+        center.x() - cross_gap,
+        center.y(),
+    )
+    painter.drawLine(
+        center.x() + cross_gap,
+        center.y(),
+        center.x() + cross_span,
+        center.y(),
+    )
+    painter.drawLine(
+        center.x(),
+        center.y() - cross_span,
+        center.x(),
+        center.y() - cross_gap,
+    )
+    painter.drawLine(
+        center.x(),
+        center.y() + cross_gap,
+        center.x(),
+        center.y() + cross_span,
+    )
+
+    liquidity_y = canvas.top() + canvas.height() * 0.37
+    liq_pen = QPen(css_color(rgba(TEXT_SECONDARY, 0.86)), max(1.0, size * 0.03))
+    liq_pen.setCapStyle(Qt.RoundCap)
+    painter.setPen(liq_pen)
+    painter.drawLine(
+        canvas.left() + canvas.width() * 0.18,
+        liquidity_y,
+        canvas.right() - canvas.width() * 0.18,
+        liquidity_y,
+    )
+
+    wick_pen = QPen(css_color(rgba(ACCENT_GREEN, 0.96)), max(1.4, size * 0.042))
+    wick_pen.setCapStyle(Qt.RoundCap)
+    painter.setPen(wick_pen)
+    wick_top = canvas.top() + canvas.height() * 0.22
+    wick_bottom = canvas.bottom() - canvas.height() * 0.20
+    painter.drawLine(center.x(), wick_top, center.x(), wick_bottom)
+
+    body = QRectF(
+        center.x() - canvas.width() * 0.075,
+        center.y() - canvas.height() * 0.11,
+        canvas.width() * 0.15,
+        canvas.height() * 0.24,
+    )
+    body_path = QPainterPath()
+    body_path.addRoundedRect(body, size * 0.05, size * 0.05)
+    painter.fillPath(body_path, css_color(rgba(ACCENT_GREEN, 0.90)))
+
+    sweep_radius = size * 0.05
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(css_color(rgba(ACCENT_RED, 0.94)))
+    painter.drawEllipse(
+        QRectF(
+            center.x() - sweep_radius,
+            liquidity_y - canvas.height() * 0.12 - sweep_radius,
+            sweep_radius * 2,
+            sweep_radius * 2,
+        )
+    )
+    painter.restore()
+
+
+def build_brand_icon(size: int = 64) -> QIcon:
+    icon_size = max(16, int(size))
+    pixmap = QPixmap(icon_size, icon_size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    _draw_brand_mark(painter, QRectF(0, 0, icon_size, icon_size))
+    painter.end()
+    return QIcon(pixmap)
 
 
 class PanelCard(QFrame):
@@ -72,6 +183,18 @@ class LiveIndicator(QFrame):
             f"border-radius: {radius}px;"
             "}"
         )
+
+
+class BrandMark(QWidget):
+    def __init__(self, size: int = 42, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._size = max(20, int(size))
+        self.setFixedSize(self._size, self._size)
+
+    def paintEvent(self, _event) -> None:  # noqa: N802 - Qt API
+        painter = QPainter(self)
+        _draw_brand_mark(painter, QRectF(0, 0, self.width(), self.height()))
+        painter.end()
 
 
 class StatusBadge(QLabel):
@@ -135,9 +258,13 @@ class CommandBar(PanelCard):
         top_row = QHBoxLayout()
         top_row.setSpacing(SPACE_4)
 
+        brand_cluster = QHBoxLayout()
+        brand_cluster.setSpacing(SPACE_3)
+        brand_cluster.addWidget(BrandMark(44), 0, Qt.AlignTop)
+
         title_box = QVBoxLayout()
         title_box.setSpacing(4)
-        eyebrow = QLabel("Scanner Terminal")
+        eyebrow = QLabel("Precision Liquidity Terminal")
         eyebrow.setProperty("uiClass", "eyebrow")
         self.title_label = QLabel(f"{app_name}  v{version}  |  strategy v{strategy_version}")
         self.title_label.setProperty("uiClass", "heroTitle")
@@ -146,21 +273,22 @@ class CommandBar(PanelCard):
         title_box.addWidget(eyebrow)
         title_box.addWidget(self.title_label)
         title_box.addWidget(self.subtitle_label)
-        top_row.addLayout(title_box, 1)
+        brand_cluster.addLayout(title_box, 1)
+        top_row.addLayout(brand_cluster, 1)
 
         control_cluster = QHBoxLayout()
         control_cluster.setSpacing(SPACE_2)
         interval_label = QLabel("Interval")
         interval_label.setProperty("uiClass", "meta")
-        ob_label = QLabel("OB FVG")
+        ob_label = QLabel("iFVG Mode")
         ob_label.setProperty("uiClass", "meta")
         self.interval_spin = QSpinBox()
         self.interval_spin.setFixedWidth(84)
         self.ob_fvg_mode_combo = QComboBox()
         self.ob_fvg_mode_combo.setFixedWidth(110)
-        self.start_button = QPushButton("Start")
+        self.start_button = QPushButton("Arm Scanner")
         self.start_button.setProperty("variant", "success")
-        self.stop_button = QPushButton("Stop")
+        self.stop_button = QPushButton("Disarm")
         self.stop_button.setProperty("variant", "danger")
         for button in (self.start_button, self.stop_button):
             button.setCursor(Qt.PointingHandCursor)
@@ -183,15 +311,15 @@ class CommandBar(PanelCard):
         status_row = QHBoxLayout()
         status_row.setSpacing(SPACE_2)
         self.live_indicator = LiveIndicator(10)
-        self.status_badge = StatusBadge("IDLE")
-        self.status_title = QLabel("Scanner is idle")
+        self.status_badge = StatusBadge("STANDBY")
+        self.status_title = QLabel("Scanner on standby")
         self.status_title.setProperty("uiClass", "commandHeadline")
         status_row.addWidget(self.live_indicator, 0, Qt.AlignVCenter)
         status_row.addWidget(self.status_badge, 0, Qt.AlignVCenter)
         status_row.addWidget(self.status_title, 1, Qt.AlignVCenter)
-        self.scan_progress_label = QLabel("Awaiting first scan cycle.")
+        self.scan_progress_label = QLabel("Awaiting first sweep check.")
         self.scan_progress_label.setProperty("uiClass", "meta")
-        self.last_scan_label = QLabel("Last scan: waiting for first cycle")
+        self.last_scan_label = QLabel("Last sweep check: waiting for first cycle")
         self.last_scan_label.setProperty("uiClass", "metaMuted")
         live_box.addLayout(status_row)
         live_box.addWidget(self.scan_progress_label)
@@ -209,12 +337,12 @@ class CommandBar(PanelCard):
 
         action_row = QHBoxLayout()
         action_row.setSpacing(SPACE_2)
-        self.rescan_now_button = QPushButton("Rescan Now")
+        self.rescan_now_button = QPushButton("Sweep Check Now")
         self.rescan_now_button.setProperty("variant", "primary")
-        self.rescan_selected_button = QPushButton("Rescan Selected")
-        self.refresh_button = QPushButton("Refresh UI")
-        self.clear_log_button = QPushButton("Clear Activity Log")
-        self.export_log_button = QPushButton("Export Logs")
+        self.rescan_selected_button = QPushButton("Sweep Check Symbol")
+        self.refresh_button = QPushButton("Refresh Panel")
+        self.clear_log_button = QPushButton("Clear Telemetry")
+        self.export_log_button = QPushButton("Export Telemetry")
         for button in (
             self.rescan_now_button,
             self.rescan_selected_button,
@@ -311,13 +439,13 @@ class InspectorPanel(PanelCard):
 
         header = QVBoxLayout()
         header.setSpacing(4)
-        title = QLabel("Selected Symbol")
+        title = QLabel("Target Brief")
         title.setProperty("uiClass", "eyebrow")
-        self.symbol_label = QLabel("No symbol selected")
+        self.symbol_label = QLabel("No market selected")
         self.symbol_label.setProperty("uiClass", "heroTitle")
-        self.summary_label = QLabel("Select a symbol to inspect the live HTF/LTF state.")
+        self.summary_label = QLabel("Select a market to inspect the live HTF/LTF targeting state.")
         self.summary_label.setProperty("uiClass", "subtitle")
-        self.status_badge = StatusBadge("Idle")
+        self.status_badge = StatusBadge("Standby")
 
         header_row = QHBoxLayout()
         header_row.addWidget(self.symbol_label, 1)
@@ -364,7 +492,7 @@ class InspectorPanel(PanelCard):
         self.status_badge.set_badge(state_label, tone=tone)
 
     def clear(self) -> None:
-        self.set_header("No symbol selected", "Select a symbol to inspect the live HTF/LTF state.", "Idle", "neutral")
+        self.set_header("No market selected", "Select a market to inspect the live HTF/LTF targeting state.", "Standby", "neutral")
         for field in self.fields.values():
             field.set_value("--")
 

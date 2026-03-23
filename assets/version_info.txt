@@ -16,11 +16,11 @@ VSVersionInfo(
           u'040904B0',
           [
             StringStruct(u'CompanyName', u'OpenClaw'),
-            StringStruct(u'FileDescription', u'OpenClaw Scanner'),
+            StringStruct(u'FileDescription', u'Liquidity Sniper'),
             StringStruct(u'FileVersion', u'1.0.0'),
             StringStruct(u'InternalName', u'OpenClawScanner'),
             StringStruct(u'OriginalFilename', u'OpenClawScanner.exe'),
-            StringStruct(u'ProductName', u'OpenClaw Scanner'),
+            StringStruct(u'ProductName', u'Liquidity Sniper'),
             StringStruct(u'ProductVersion', u'1.0.0')
           ]
         )

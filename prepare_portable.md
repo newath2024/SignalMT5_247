@@ -1,4 +1,4 @@
-# OpenClaw Portable MT5 Deployment
+# Liquidity Sniper Portable MT5 Deployment
 
 This bundle is designed for Windows-only deployment with a local portable MT5 terminal.
 

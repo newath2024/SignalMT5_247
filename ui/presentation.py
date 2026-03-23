@@ -5,63 +5,63 @@ from datetime import datetime
 
 STATE_META = {
     "idle": {
-        "label": "Idle",
+        "label": "Standby",
         "bg": "#e5e7eb",
         "fg": "#4b5563",
         "icon": "⚪",
         "severity": "neutral",
     },
     "context_found": {
-        "label": "HTF Context",
+        "label": "Tracking",
         "bg": "#fef3c7",
         "fg": "#92400e",
         "icon": "🟡",
         "severity": "watch",
     },
     "watch_armed": {
-        "label": "Armed",
+        "label": "Locked Target",
         "bg": "#dcfce7",
         "fg": "#166534",
         "icon": "🟢",
         "severity": "watch",
     },
     "armed": {
-        "label": "Armed",
+        "label": "Locked Target",
         "bg": "#dcfce7",
         "fg": "#166534",
         "icon": "🟢",
         "severity": "watch",
     },
     "setup_building": {
-        "label": "Waiting",
+        "label": "Tracking",
         "bg": "#fde68a",
         "fg": "#92400e",
         "icon": "🟡",
         "severity": "watch",
     },
     "waiting_mss": {
-        "label": "Waiting MSS",
+        "label": "Tracking MSS",
         "bg": "#fde68a",
         "fg": "#92400e",
         "icon": "🟡",
         "severity": "watch",
     },
     "entry_ready": {
-        "label": "Ready",
+        "label": "Locked Target",
         "bg": "#dcfce7",
         "fg": "#166534",
         "icon": "🟢",
         "severity": "signal",
     },
     "confirmed": {
-        "label": "Ready",
+        "label": "Locked Target",
         "bg": "#dcfce7",
         "fg": "#166534",
         "icon": "🟢",
         "severity": "signal",
     },
     "alerted": {
-        "label": "Signal Sent",
+        "label": "Alert Routed",
         "bg": "#dcfce7",
         "fg": "#166534",
         "icon": "🟢",
@@ -75,7 +75,7 @@ STATE_META = {
         "severity": "neutral",
     },
     "rejected": {
-        "label": "Rejected",
+        "label": "Invalid / No Edge",
         "bg": "#fee2e2",
         "fg": "#991b1b",
         "icon": "🔴",
@@ -89,7 +89,7 @@ STATE_META = {
         "severity": "warning",
     },
     "error": {
-        "label": "Error",
+        "label": "Attention",
         "bg": "#fecaca",
         "fg": "#7f1d1d",
         "icon": "🔴",
@@ -128,37 +128,37 @@ PRIORITY_META = {
 
 SCANNER_STATUS_META = {
     "idle": {
-        "label": "IDLE",
+        "label": "STANDBY",
         "dot": "#94a3b8",
         "dot_pulse": "#cbd5e1",
     },
     "starting": {
-        "label": "STARTING",
+        "label": "ARMING",
         "dot": "#f59e0b",
         "dot_pulse": "#fbbf24",
     },
     "scanning": {
-        "label": "SCANNING",
+        "label": "HUNTING",
         "dot": "#f59e0b",
         "dot_pulse": "#fcd34d",
     },
     "running": {
-        "label": "RUNNING",
+        "label": "ARMED",
         "dot": "#16a34a",
         "dot_pulse": "#4ade80",
     },
     "stopping": {
-        "label": "STOPPING",
+        "label": "DISARMING",
         "dot": "#ef4444",
         "dot_pulse": "#f87171",
     },
     "stopped": {
-        "label": "STOPPED",
+        "label": "DISARMED",
         "dot": "#ef4444",
         "dot_pulse": "#ef4444",
     },
     "error": {
-        "label": "ERROR",
+        "label": "ATTENTION",
         "dot": "#dc2626",
         "dot_pulse": "#f87171",
     },
@@ -250,23 +250,23 @@ def format_symbol_focus(row: dict | None) -> str:
     state = str(payload.get("state") or "").lower()
     reason = str(payload.get("reason") or "").strip()
 
-    if state == "confirmed":
-        return "Ready now"
-    if state == "armed":
-        return "Watch armed"
-    if state == "waiting_mss":
-        return "Waiting MSS after sweep"
+    if state in {"confirmed", "entry_ready"}:
+        return "Target locked"
+    if state in {"armed", "watch_armed"}:
+        return "Target locked"
+    if state in {"waiting_mss", "setup_building"}:
+        return "Tracking MSS after sweep"
     if state == "context_found":
-        return "Waiting LTF sweep" if "ltf sweep" in reason.lower() else "Waiting HTF trigger"
+        return "Tracking LTF sweep" if "ltf sweep" in reason.lower() else "Tracking HTF trigger"
     if state == "rejected":
         if "strict ifvg" in reason.lower():
             return "No strict iFVG"
-        return reason.replace("rejected:", "").strip() or "Rejected"
+        return reason.replace("rejected:", "").strip() or "No edge"
     if state == "cooldown":
         return "Cooldown"
     if state == "error":
-        return "Scanner error"
-    return "No setup"
+        return "Operator attention"
+    return "No edge yet"
 
 
 def get_priority_meta(row: dict | None) -> dict[str, str | int | bool]:
@@ -274,7 +274,7 @@ def get_priority_meta(row: dict | None) -> dict[str, str | int | bool]:
     state = str(payload.get("state") or "").lower()
     phase = str(payload.get("phase") or "").upper()
 
-    if state in {"confirmed", "armed", "waiting_mss"}:
+    if state in {"confirmed", "entry_ready", "armed", "watch_armed", "waiting_mss"}:
         return PRIORITY_META["high"]
     if state == "context_found":
         return PRIORITY_META["medium"] if phase == "LTF_SWEEP" else PRIORITY_META["low"]
@@ -378,12 +378,12 @@ def format_phase(value: str | None) -> str:
     if not value:
         return "-"
     labels = {
-        "HTF_CONTEXT": "HTF Context",
-        "LTF_SWEEP": "LTF Sweep",
-        "WAITING_MSS": "Waiting MSS",
+        "HTF_CONTEXT": "HTF Thesis",
+        "LTF_SWEEP": "Sweep Tracking",
+        "WAITING_MSS": "Tracking MSS",
         "IFVG_VALIDATION": "iFVG Validation",
-        "READY": "Ready",
-        "ALERT_SENT": "Alert Sent",
+        "READY": "Locked Target",
+        "ALERT_SENT": "Alert Routed",
     }
     return labels.get(value, value)
 

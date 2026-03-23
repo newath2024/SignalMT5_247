@@ -61,7 +61,7 @@ def build_seed_snapshot() -> dict:
                 "market_structure_bias": "bullish",
                 "liquidity_interaction_state": "-",
                 "reaction_strength": "moderate",
-                "phase": "Waiting MSS",
+                "phase": "Tracking MSS",
                 "htf_context": "H4 bullish FVG",
                 "htf_zone_type": "H4 FVG",
                 "htf_zone_source": "H4 FVG candle @ 2026-03-20 04:00 UTC | idx 118 | O 1.2721 H 1.2755 L 1.2718 C 1.2749",
@@ -207,7 +207,7 @@ def build_seed_snapshot() -> dict:
 
     return {
         "app": {
-            "name": "OpenClaw Scanner",
+            "name": "Liquidity Sniper",
             "version": "2.0.0",
             "strategy_version": "1.0.0",
         },

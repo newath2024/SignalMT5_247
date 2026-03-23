@@ -9,31 +9,31 @@ FONT_FAMILY = "Segoe UI"
 FONT_SIZE = 10
 MONO_FONT_FAMILY = "Consolas"
 
-BACKGROUND_PRIMARY = "#08111f"
-BACKGROUND_ELEVATED = "#0d1728"
-BACKGROUND_CARD = "#101b2d"
-BACKGROUND_CARD_ALT = "#162338"
-BACKGROUND_TABLE = "#0c1525"
-BACKGROUND_INPUT = "#0b1423"
-BACKGROUND_OVERLAY = "#0f1a2d"
+BACKGROUND_PRIMARY = "#06101c"
+BACKGROUND_ELEVATED = "#0c1728"
+BACKGROUND_CARD = "#0d1829"
+BACKGROUND_CARD_ALT = "#132239"
+BACKGROUND_TABLE = "#0a1423"
+BACKGROUND_INPUT = "#091321"
+BACKGROUND_OVERLAY = "#10203a"
 
-BORDER_SUBTLE = "#20314a"
-BORDER_STRONG = "#355171"
-DIVIDER = "#1b2a40"
+BORDER_SUBTLE = "#1e3048"
+BORDER_STRONG = "#315170"
+DIVIDER = "#1a2a40"
 
 TEXT_PRIMARY = "#e5edf7"
 TEXT_SECONDARY = "#9cb0c8"
 TEXT_TERTIARY = "#71849d"
 TEXT_DIM = "#5a6b82"
 
-ACCENT_BLUE = "#38bdf8"
+ACCENT_BLUE = "#36b8ff"
 ACCENT_CYAN = "#22d3ee"
-ACCENT_GREEN = "#22c55e"
+ACCENT_GREEN = "#2fe27a"
 ACCENT_AMBER = "#f59e0b"
-ACCENT_RED = "#ef4444"
+ACCENT_RED = "#ff5b68"
 ACCENT_SLATE = "#94a3b8"
 
-SHADOW = "#030712"
+SHADOW = "#02060e"
 
 SPACE_1 = 4
 SPACE_2 = 8
@@ -120,13 +120,13 @@ PRIORITY_TO_TONE = {
 
 
 SCANNER_STATUS = {
-    "idle": {"label": "IDLE", "tone": "neutral", "dot": ACCENT_SLATE, "pulse": "#b5c2d3"},
-    "starting": {"label": "STARTING", "tone": "warning", "dot": ACCENT_AMBER, "pulse": "#f7c768"},
-    "scanning": {"label": "SCANNING", "tone": "warning", "dot": ACCENT_AMBER, "pulse": "#ffd36d"},
-    "running": {"label": "RUNNING", "tone": "success", "dot": ACCENT_GREEN, "pulse": "#57db89"},
-    "stopping": {"label": "STOPPING", "tone": "danger", "dot": ACCENT_RED, "pulse": "#fb7785"},
-    "stopped": {"label": "STOPPED", "tone": "danger", "dot": ACCENT_RED, "pulse": ACCENT_RED},
-    "error": {"label": "ERROR", "tone": "danger", "dot": ACCENT_RED, "pulse": "#fb7785"},
+    "idle": {"label": "STANDBY", "tone": "neutral", "dot": ACCENT_SLATE, "pulse": "#b5c2d3"},
+    "starting": {"label": "ARMING", "tone": "warning", "dot": ACCENT_AMBER, "pulse": "#f7c768"},
+    "scanning": {"label": "HUNTING", "tone": "warning", "dot": ACCENT_AMBER, "pulse": "#ffd36d"},
+    "running": {"label": "ARMED", "tone": "success", "dot": ACCENT_GREEN, "pulse": "#6ff1a2"},
+    "stopping": {"label": "DISARMING", "tone": "danger", "dot": ACCENT_RED, "pulse": "#ff8d96"},
+    "stopped": {"label": "DISARMED", "tone": "danger", "dot": ACCENT_RED, "pulse": ACCENT_RED},
+    "error": {"label": "ATTENTION", "tone": "danger", "dot": ACCENT_RED, "pulse": "#ff8d96"},
 }
 
 
@@ -218,11 +218,11 @@ def connection_tone(active: bool, kind: str = "default") -> str:
 def row_palette_for_state(state: str | None) -> dict[str, QColor]:
     key = str(state or "").lower()
     if key in {"armed", "watch_armed", "entry_ready", "confirmed", "alerted"}:
-        return {"background": qcolor(ACCENT_GREEN, 0.13), "foreground": qcolor(TEXT_PRIMARY)}
+        return {"background": qcolor(ACCENT_GREEN, 0.15), "foreground": qcolor(TEXT_PRIMARY)}
     if key in {"context_found", "setup_building", "waiting_mss"}:
-        return {"background": qcolor(ACCENT_AMBER, 0.11), "foreground": qcolor(TEXT_PRIMARY)}
+        return {"background": qcolor(ACCENT_AMBER, 0.10), "foreground": qcolor(TEXT_PRIMARY)}
     if key in {"rejected", "expired"}:
-        return {"background": qcolor(ACCENT_RED, 0.05), "foreground": qcolor(TEXT_SECONDARY)}
+        return {"background": qcolor(ACCENT_RED, 0.04), "foreground": qcolor(TEXT_SECONDARY)}
     if key == "error":
         return {"background": qcolor(ACCENT_RED, 0.12), "foreground": qcolor("#ffd5db")}
     if key == "cooldown":
@@ -296,7 +296,7 @@ def build_stylesheet() -> str:
     }}
     QLabel[uiClass="heroTitle"] {{
         color: {TEXT_PRIMARY};
-        font-size: 24px;
+        font-size: 25px;
         font-weight: 700;
     }}
     QLabel[uiClass="subtitle"] {{
@@ -398,30 +398,30 @@ def build_stylesheet() -> str:
         border-color: {rgba(ACCENT_BLUE, 0.56)};
     }}
     QPushButton[variant="success"] {{
-        background: {rgba(ACCENT_GREEN, 0.18)};
+        background: {rgba(ACCENT_GREEN, 0.22)};
         color: #ddfceb;
-        border-color: {rgba(ACCENT_GREEN, 0.34)};
+        border-color: {rgba(ACCENT_GREEN, 0.40)};
     }}
     QPushButton[variant="success"]:hover {{
-        background: {rgba(ACCENT_GREEN, 0.26)};
-        border-color: {rgba(ACCENT_GREEN, 0.48)};
+        background: {rgba(ACCENT_GREEN, 0.30)};
+        border-color: {rgba(ACCENT_GREEN, 0.52)};
     }}
     QPushButton[variant="success"]:pressed {{
-        background: {rgba(ACCENT_GREEN, 0.34)};
-        border-color: {rgba(ACCENT_GREEN, 0.58)};
+        background: {rgba(ACCENT_GREEN, 0.38)};
+        border-color: {rgba(ACCENT_GREEN, 0.60)};
     }}
     QPushButton[variant="danger"] {{
-        background: {rgba(ACCENT_RED, 0.14)};
+        background: {rgba(ACCENT_RED, 0.18)};
         color: #ffd5db;
-        border-color: {rgba(ACCENT_RED, 0.28)};
+        border-color: {rgba(ACCENT_RED, 0.34)};
     }}
     QPushButton[variant="danger"]:hover {{
-        background: {rgba(ACCENT_RED, 0.22)};
-        border-color: {rgba(ACCENT_RED, 0.42)};
+        background: {rgba(ACCENT_RED, 0.28)};
+        border-color: {rgba(ACCENT_RED, 0.48)};
     }}
     QPushButton[variant="danger"]:pressed {{
-        background: {rgba(ACCENT_RED, 0.30)};
-        border-color: {rgba(ACCENT_RED, 0.52)};
+        background: {rgba(ACCENT_RED, 0.36)};
+        border-color: {rgba(ACCENT_RED, 0.58)};
     }}
     QPushButton[variant="success"]:disabled,
     QPushButton[variant="danger"]:disabled,
@@ -507,7 +507,7 @@ def build_stylesheet() -> str:
         border: 1px solid {BORDER_SUBTLE};
         border-radius: {RADIUS_LG}px;
         gridline-color: transparent;
-        selection-background-color: {rgba(ACCENT_BLUE, 0.18)};
+        selection-background-color: {rgba(ACCENT_BLUE, 0.24)};
         selection-color: {TEXT_PRIMARY};
         outline: 0;
     }}

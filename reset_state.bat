@@ -4,7 +4,7 @@ set "APP_HOME=%LOCALAPPDATA%\OpenClaw"
 set "STATE_FILE=%APP_HOME%\data\runtime_state.json"
 set "DB_FILE=%APP_HOME%\data\history.db"
 
-echo Resetting OpenClaw runtime state...
+echo Resetting Liquidity Sniper runtime state...
 echo.
 
 call :delete_if_exists "%STATE_FILE%"

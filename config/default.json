@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "app": {
-    "name": "OpenClaw Scanner",
+    "name": "Liquidity Sniper",
     "version": "2.0.0",
     "strategy_version": "1.0.0",
-    "tagline": "Production-grade local desktop scanner for HTF/LTF MT5 signals."
+    "tagline": "Precision liquidity sweep scanner for HTF/LTF execution."
   },
   "scanner": {
     "symbols": [

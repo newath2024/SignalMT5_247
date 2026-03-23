@@ -265,27 +265,27 @@ class ScannerCommandService:
         errors = [item["symbol"] for item in results if item.get("state") == SetupState.ERROR.value]
         actionable_count = len(ready) + len(armed)
         lines = [
-            f"Full scan complete: {len(results)} symbols",
-            f"Actionable setups: {actionable_count}",
-            f"Ready: {_format_symbol_list(ready)}",
-            f"Armed / waiting MSS: {_format_symbol_list(armed)}",
-            f"HTF context only: {_format_symbol_list(context_only)}",
-            f"Rejected: {_format_symbol_list(rejected)}",
+            f"Sweep check complete: {len(results)} symbols",
+            f"Active setups: {actionable_count}",
+            f"Locked targets: {_format_symbol_list(ready)}",
+            f"Tracking setups: {_format_symbol_list(armed)}",
+            f"HTF thesis only: {_format_symbol_list(context_only)}",
+            f"Invalid / no edge: {_format_symbol_list(rejected)}",
         ]
         if errors:
-            lines.append(f"Errors: {_format_symbol_list(errors)}")
+            lines.append(f"Attention: {_format_symbol_list(errors)}")
         return "\n".join(lines)
 
     @staticmethod
     def _state_label(state: str | None) -> str:
         labels = {
-            SetupState.IDLE.value: "Idle",
-            SetupState.CONTEXT_FOUND.value: "HTF Context",
-            SetupState.ARMED.value: "Armed",
-            SetupState.WAITING_MSS.value: "Waiting MSS",
-            SetupState.CONFIRMED.value: "Ready",
+            SetupState.IDLE.value: "Standby",
+            SetupState.CONTEXT_FOUND.value: "Tracking",
+            SetupState.ARMED.value: "Locked Target",
+            SetupState.WAITING_MSS.value: "Tracking MSS",
+            SetupState.CONFIRMED.value: "Locked Target",
             SetupState.COOLDOWN.value: "Cooldown",
-            SetupState.REJECTED.value: "Rejected",
-            SetupState.ERROR.value: "Error",
+            SetupState.REJECTED.value: "Invalid / No Edge",
+            SetupState.ERROR.value: "Attention",
         }
         return labels.get(str(state or "").lower(), str(state or "-"))

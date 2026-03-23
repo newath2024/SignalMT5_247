@@ -5,7 +5,7 @@ from .controller import AppController
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description="OpenClaw Scanner desktop application")
+    parser = argparse.ArgumentParser(description="Liquidity Sniper desktop application")
     parser.add_argument("--headless", action="store_true", help="Run without the desktop UI.")
     parser.add_argument("--once", action="store_true", help="Run one scan cycle and exit.")
     parser.add_argument("--interval", type=int, help="Override loop interval in seconds.")

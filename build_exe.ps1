@@ -4,8 +4,8 @@ $python = (& py -3.12 -c "import sys; print(sys.executable)").Trim()
 $specFile = Join-Path $PSScriptRoot "OpenClawScanner.spec"
 $envFile = Join-Path $PSScriptRoot ".env"
 $notesFile = Join-Path $PSScriptRoot "PORTABLE_SETUP.txt"
-$iconFile = Join-Path $PSScriptRoot "assets\openclaw.ico"
-$iconPngFile = Join-Path $PSScriptRoot "assets\openclaw_icon.png"
+$iconFile = Join-Path $PSScriptRoot "assets\liquidity_sniper.ico"
+$iconPngFile = Join-Path $PSScriptRoot "assets\liquidity_sniper_icon.png"
 $distDir = Join-Path $PSScriptRoot "dist\OpenClawScanner"
 $resetScript = Join-Path $distDir "ResetScannerState.bat"
 
@@ -28,11 +28,11 @@ if (Test-Path $notesFile) {
 }
 
 if (Test-Path $iconFile) {
-  Copy-Item $iconFile (Join-Path $distDir "openclaw.ico") -Force
+  Copy-Item $iconFile (Join-Path $distDir "liquidity_sniper.ico") -Force
 }
 
 if (Test-Path $iconPngFile) {
-  Copy-Item $iconPngFile (Join-Path $distDir "openclaw_icon.png") -Force
+  Copy-Item $iconPngFile (Join-Path $distDir "liquidity_sniper_icon.png") -Force
 }
 
 @'
@@ -42,7 +42,7 @@ set "APP_HOME=%LOCALAPPDATA%\OpenClaw"
 set "STATE_FILE=%APP_HOME%\data\runtime_state.json"
 set "DB_FILE=%APP_HOME%\data\history.db"
 
-echo Resetting OpenClaw runtime state...
+echo Resetting Liquidity Sniper runtime state...
 if exist "%STATE_FILE%" del /f /q "%STATE_FILE%"
 if exist "%DB_FILE%" del /f /q "%DB_FILE%"
 echo Done. Config and logs were kept.

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import threading
 import time
@@ -72,6 +72,7 @@ try:
         StatCard,
         StatusBadge,
         TelemetryLogView,
+        build_brand_icon,
     )
 
     _PYSIDE_IMPORT_ERROR = None
@@ -89,12 +90,20 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self._last_snapshot: dict | None = None
         self._pulse_on = False
 
-        self.setWindowTitle(f"{controller.config.app.name} Control Center")
+        self.setWindowTitle(f"{controller.config.app.name} v{controller.config.app.version}")
         self.resize(1600, 980)
         self.setMinimumSize(1360, 860)
-        icon_path = BUNDLE_ROOT / "assets" / "openclaw.ico"
+        icon_path = BUNDLE_ROOT / "assets" / "liquidity_sniper.ico"
+        vector_icon_path = BUNDLE_ROOT / "assets" / "liquidity_sniper_mark.svg"
+        legacy_icon_path = BUNDLE_ROOT / "assets" / "openclaw.ico"
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
+        elif vector_icon_path.exists():
+            self.setWindowIcon(QIcon(str(vector_icon_path)))
+        elif legacy_icon_path.exists():
+            self.setWindowIcon(QIcon(str(legacy_icon_path)))
+        else:
+            self.setWindowIcon(build_brand_icon())
 
         self.command_bar = CommandBar(
             controller.config.app.name,
@@ -116,16 +125,16 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.clear_log_button = self.command_bar.clear_log_button
         self.export_log_button = self.command_bar.export_log_button
 
-        self.actionable_only_checkbox = QCheckBox("Show only actionable setups")
-        self.symbol_count_label = QLabel("Showing 0/0 symbols")
+        self.actionable_only_checkbox = QCheckBox("Show only setups with edge")
+        self.symbol_count_label = QLabel("Watching 0/0 markets")
         self.symbol_count_label.setProperty("uiClass", "meta")
 
         self.log_filter = QComboBox()
         self.log_filter.addItem("All", "all")
-        self.log_filter.addItem("Signals Only", "signals")
+        self.log_filter.addItem("Targets Only", "signals")
         self.log_filter.addItem("Warnings / Errors", "warnings")
         self.log_symbol_filter = QLineEdit()
-        self.log_symbol_filter.setPlaceholderText("Filter by pair, symbol, or text")
+        self.log_symbol_filter.setPlaceholderText("Filter by market, symbol, or text")
 
         self.symbol_table = ModernTableWidget(8)
         self.watch_table = ModernTableWidget(9, compact=True)
@@ -133,29 +142,29 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.log_view = TelemetryLogView()
 
         self.metric_cards = {
-            "active_watches": StatCard("Active Watches"),
+            "active_watches": StatCard("Active Setups"),
             "confirmed_signals": StatCard("Confirmed Today"),
-            "coverage": StatCard("Coverage"),
-            "loop_interval": StatCard("Loop Interval"),
+            "coverage": StatCard("Market Coverage"),
+            "loop_interval": StatCard("Sweep Cadence"),
         }
 
         self.inspector = InspectorPanel()
         self.inspector.add_section(
-            "Status",
+            "Target Status",
             (
-                ("current_state", "Current State"),
+                ("current_state", "Target State"),
                 ("priority", "Priority"),
                 ("phase", "Phase"),
-                ("reason", "Next Step"),
+                ("reason", "Execution Step"),
                 ("score", "Score"),
                 ("cooldown_info", "Cooldown"),
             ),
         )
         self.inspector.add_section(
-            "HTF Context",
+            "HTF Thesis",
             (
                 ("htf_bias", "HTF Bias"),
-                ("htf_context", "Context"),
+                ("htf_context", "Thesis"),
                 ("htf_zone_type", "Zone Type"),
                 ("zone", "Zone"),
                 ("htf_zone_source", "Source"),
@@ -163,7 +172,7 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             multiline_keys={"zone", "htf_zone_source"},
         )
         self.inspector.add_section(
-            "Structure",
+            "Market Structure",
             (
                 ("market_structure_bias", "Market Bias"),
                 ("liquidity_interaction_state", "Liquidity"),
@@ -174,16 +183,16 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             multiline_keys={"htf_context_reason", "timeline"},
         )
         self.inspector.add_section(
-            "LTF Confirmation",
+            "Execution Trigger",
             (
                 ("last_detected_sweep", "Last Sweep"),
                 ("last_detected_mss", "MSS"),
                 ("last_detected_ifvg", "iFVG"),
-                ("active_watch_info", "Watch"),
+                ("active_watch_info", "Live Watch"),
                 ("zone_top_bottom", "Entry Zone"),
                 ("last_alert_time", "Last Alert"),
-                ("rejection_reason", "Rejection"),
-                ("rejection_debug", "Why Rejected"),
+                ("rejection_reason", "No Edge"),
+                ("rejection_debug", "Why No Edge"),
             ),
             multiline_keys={"active_watch_info", "rejection_reason", "rejection_debug"},
         )
@@ -245,10 +254,10 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         layout.setSpacing(0)
 
         tabs = QTabWidget()
-        tabs.addTab(self._build_symbol_tab(), "Symbol Health")
-        tabs.addTab(self._build_watch_tab(), "Watch Pipeline")
-        tabs.addTab(self._build_alert_tab(), "Recent Alerts")
-        tabs.addTab(self._build_activity_tab(), "Activity Log")
+        tabs.addTab(self._build_symbol_tab(), "Market Radar")
+        tabs.addTab(self._build_watch_tab(), "Target Pipeline")
+        tabs.addTab(self._build_alert_tab(), "Alert Feed")
+        tabs.addTab(self._build_activity_tab(), "Telemetry")
         layout.addWidget(tabs)
         return container
 
@@ -269,22 +278,22 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
 
     def _build_symbol_tab(self) -> QWidget:
         card, layout = self._build_panel_card(
-            "Scanner State",
-            "Live HTF/LTF view across the watchlist, with actionable setups rising above rejected noise.",
+            "Market Radar",
+            "Live HTF/LTF sweep view across the hunting list, with the cleanest setups rising above the noise.",
         )
         top_row = QHBoxLayout()
         top_row.setSpacing(SPACE_3)
         top_row.addWidget(self.actionable_only_checkbox)
         top_row.addWidget(self.symbol_count_label)
         top_row.addStretch(1)
-        top_row.addWidget(self._legend_badge("Idle", "neutral"))
-        top_row.addWidget(self._legend_badge("Waiting", "warning"))
-        top_row.addWidget(self._legend_badge("Armed / Ready", "success"))
-        top_row.addWidget(self._legend_badge("Rejected", "muted"))
+        top_row.addWidget(self._legend_badge("Standby", "neutral"))
+        top_row.addWidget(self._legend_badge("Tracking", "warning"))
+        top_row.addWidget(self._legend_badge("Locked Target", "success"))
+        top_row.addWidget(self._legend_badge("Invalid / No Edge", "muted"))
         layout.addLayout(top_row)
 
         self.symbol_table.setHorizontalHeaderLabels(
-            ["Symbol", "Status", "HTF", "Next", "TF", "Price", "Priority", "Updated"]
+            ["Market", "Status", "HTF Thesis", "Focus", "TF", "Price", "Priority", "Updated"]
         )
         self._configure_table(self.symbol_table, stretch_column=3, badge_columns=(1, 6))
         layout.addWidget(self.symbol_table, 1)
@@ -292,11 +301,11 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
 
     def _build_watch_tab(self) -> QWidget:
         card, layout = self._build_panel_card(
-            "Watch Pipeline",
-            "Persistent watch states for the currently tracked symbols and armed zones.",
+            "Target Pipeline",
+            "Persistent targeting states for tracked markets and locked execution zones.",
         )
         self.watch_table.setHorizontalHeaderLabels(
-            ["Symbol", "TF", "Direction", "HTF Context", "LTF Sweep", "Current State", "Waiting For", "Zone", "Armed Since"]
+            ["Market", "TF", "Side", "HTF Thesis", "Sweep State", "Target State", "Tracking", "Zone", "Locked Since"]
         )
         self._configure_table(self.watch_table, stretch_column=3, badge_columns=(2, 5))
         layout.addWidget(self.watch_table, 1)
@@ -304,11 +313,11 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
 
     def _build_alert_tab(self) -> QWidget:
         card, layout = self._build_panel_card(
-            "Recent Alerts",
-            "Freshly emitted alerts, entries, and blocked states from the active strategy runtime.",
+            "Alert Feed",
+            "Fresh alerts, routed executions, and blocked states from the live strategy runtime.",
         )
         self.alert_table.setHorizontalHeaderLabels(
-            ["Time", "Symbol", "TF", "Direction", "Alert Type", "Reason", "Entry", "SL", "Status"]
+            ["Time", "Market", "TF", "Side", "Alert", "Reason", "Entry", "SL", "Status"]
         )
         self._configure_table(self.alert_table, stretch_column=5, badge_columns=(3, 8))
         layout.addWidget(self.alert_table, 1)
@@ -316,8 +325,8 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
 
     def _build_activity_tab(self) -> QWidget:
         card, layout = self._build_panel_card(
-            "Activity Log",
-            "Recent system telemetry, scanner decisions, warnings, and export-ready operator logs.",
+            "System Telemetry",
+            "Scanner telemetry, targeting decisions, warnings, and export-ready operator logs.",
         )
         filter_row = QHBoxLayout()
         filter_row.setSpacing(SPACE_3)
@@ -388,7 +397,7 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
     def rescan_selected_symbol(self) -> None:
         symbol = self._selected_symbol()
         if not symbol:
-            QMessageBox.information(self, APP_NAME, "Select a symbol first.")
+            QMessageBox.information(self, APP_NAME, "Select a market first.")
             return
         self._run_background(lambda: self.controller.rescan_symbol(symbol))
 
@@ -397,10 +406,10 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.refresh_snapshot()
 
     def export_logs(self) -> None:
-        default_path = Path(self.controller.logger.log_file).with_name("openclaw_export.log")
+        default_path = Path(self.controller.logger.log_file).with_name("liquidity_sniper_export.log")
         target, _ = QFileDialog.getSaveFileName(
             self,
-            "Export Logs",
+            "Export Telemetry",
             str(default_path),
             "Log Files (*.log);;Text Files (*.txt)",
         )
@@ -434,13 +443,13 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         mt5_connected = bool(connections["mt5"]["connected"])
         self.command_bar.mt5_badge.set_connection(
             mt5_connected,
-            "Connected" if mt5_connected else "Disconnected",
+            "Linked" if mt5_connected else "Offline",
             tone=connection_tone(mt5_connected, "mt5"),
         )
         telegram_configured = bool(connections["telegram"]["configured"])
         self.command_bar.telegram_badge.set_connection(
             telegram_configured,
-            "Configured" if telegram_configured else "Missing Config",
+            "Routed" if telegram_configured else "Not Ready",
             tone=connection_tone(telegram_configured, "telegram"),
         )
 
@@ -452,19 +461,19 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
 
         self.metric_cards["active_watches"].set_value(
             str(metrics["active_watches"]),
-            "Persistent armed states and setups waiting for MSS/iFVG confirmation.",
+            "Markets currently being tracked for MSS and iFVG execution alignment.",
         )
         self.metric_cards["confirmed_signals"].set_value(
             str(metrics["confirmed_signals_today"]),
-            "Live count pulled from SQLite signal history for the current trading day.",
+            "Confirmed sniper entries recorded in local history during the current session.",
         )
         self.metric_cards["coverage"].set_value(
             f"{metrics['scanned_symbols']}/{metrics['total_symbols']}",
-            "Watchlist symbols processed in the current runtime session.",
+            "Markets processed by the active sweep engine during this runtime session.",
         )
         self.metric_cards["loop_interval"].set_value(
             f"{scanner['interval_sec']}s",
-            "Configured delay before the next automated scanner cycle begins.",
+            "Configured delay before the next automated sweep check begins.",
         )
 
         self._fill_symbol_table(snapshot["symbols"])
@@ -507,19 +516,19 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             total = max(0, int(progress.get("total") or 0))
             current = max(1, int(progress.get("current") or 0)) if total else int(progress.get("current") or 0)
             if total:
-                return f"Scanning live watchlist  ({current}/{total})"
-            return "Scanning live watchlist"
+                return f"Hunting liquidity across live markets  ({current}/{total})"
+            return "Hunting liquidity across live markets"
         if status == "running":
-            return "Scanner live and waiting for next cycle"
+            return "Scanner armed and scanning for sweep setups"
         if status == "starting":
-            return "Starting scanner services"
+            return "Arming scanner services"
         if status == "stopping":
-            return "Stopping scanner services"
+            return "Disarming scanner services"
         if status == "error":
-            return "Scanner needs operator attention"
+            return "Scanner requires operator attention"
         if status == "stopped":
-            return "Scanner stopped"
-        return "Scanner is idle"
+            return "Scanner disarmed"
+        return "Scanner on standby"
 
     @staticmethod
     def _build_scan_progress_text(scanner: dict, metrics: dict, strategy: dict) -> str:
@@ -530,38 +539,38 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             total = max(0, int(progress.get("total") or 0))
             current = max(1, int(progress.get("current") or 0)) if total else int(progress.get("current") or 0)
             if total:
-                pieces.append(f"Cycle {current}/{total}")
+                pieces.append(f"Sweep pass {current}/{total}")
             current_symbol = progress.get("current_symbol")
             if current_symbol:
-                pieces.append(f"Current {current_symbol}")
+                pieces.append(f"Tracking {current_symbol}")
         else:
             scanned_symbols = int(metrics.get("scanned_symbols") or 0)
             total_symbols = int(metrics.get("total_symbols") or 0)
             if total_symbols:
-                pieces.append(f"Coverage {scanned_symbols}/{total_symbols}")
+                pieces.append(f"Market coverage {scanned_symbols}/{total_symbols}")
             next_scan_at = scanner.get("next_scan_at")
             if status == "running" and next_scan_at is not None:
                 remaining = max(0, int(next_scan_at - time.time()))
-                pieces.append(f"Next scan in {format_duration(remaining)}")
-        pieces.append(f"Interval {scanner.get('interval_sec', 0)}s")
-        pieces.append(f"OB FVG {strategy.get('ob_fvg_mode', 'medium')}")
+                pieces.append(f"Next sweep check in {format_duration(remaining)}")
+        pieces.append(f"Cadence {scanner.get('interval_sec', 0)}s")
+        pieces.append(f"iFVG mode {strategy.get('ob_fvg_mode', 'medium')}")
         if status == "error" and scanner.get("last_error"):
             pieces.append(f"Error: {scanner['last_error']}")
-        return "  •  ".join(piece for piece in pieces if piece)
+        return "  |  ".join(piece for piece in pieces if piece)
 
     @staticmethod
     def _build_last_scan_text(scanner: dict) -> str:
         last_cycle = dict(scanner.get("last_cycle") or {})
         finished_at = last_cycle.get("finished_at")
         if finished_at:
-            return f"Last scan {format_short_time(finished_at)}  •  {format_relative_age(finished_at)}"
+            return f"Last sweep check {format_short_time(finished_at)}  |  {format_relative_age(finished_at)}"
         progress = dict(scanner.get("progress") or {})
         if progress.get("active") and progress.get("started_at"):
             return (
-                f"Current cycle started {format_short_time(progress['started_at'])}"
-                f"  •  {format_relative_age(progress['started_at'])}"
+                f"Current hunt started {format_short_time(progress['started_at'])}"
+                f"  |  {format_relative_age(progress['started_at'])}"
             )
-        return "Last scan waiting for first cycle"
+        return "Last sweep check waiting for first cycle"
 
     def _sync_scanner_action_buttons(self, scanner: dict | None) -> None:
         payload = dict(scanner or {})
@@ -579,9 +588,9 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.start_button.setEnabled(start_enabled)
         self.stop_button.setEnabled(stop_enabled)
 
-        start_tooltip = "Start the scanner loop" if start_enabled else "Scanner is already running"
-        stop_tooltip = "Stop the scanner loop" if stop_enabled else (
-            "Scanner is stopping" if stopping else "Scanner is not running"
+        start_tooltip = "Arm the scanner loop" if start_enabled else "Scanner is already armed"
+        stop_tooltip = "Disarm the scanner loop" if stop_enabled else (
+            "Scanner is disarming" if stopping else "Scanner is already disarmed"
         )
         self.start_button.setToolTip(start_tooltip)
         self.stop_button.setToolTip(stop_tooltip)
@@ -593,7 +602,7 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         if self.actionable_only_checkbox.isChecked():
             display_rows = [item for item in display_rows if is_actionable_symbol(item)]
         self._symbol_rows = display_rows
-        self.symbol_count_label.setText(f"Showing {len(display_rows)}/{total_rows} symbols")
+        self.symbol_count_label.setText(f"Watching {len(display_rows)}/{total_rows} markets")
 
         signal_state = self.symbol_table.blockSignals(True)
         self.symbol_table.setUpdatesEnabled(False)
@@ -764,10 +773,10 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             format_symbol_focus(payload),
             format_relative_age(payload.get("last_update")),
         ]
-        summary = "  •  ".join(bit for bit in summary_bits if bit and bit != "-")
+        summary = "  |  ".join(bit for bit in summary_bits if bit and bit != "-")
         self.inspector.set_header(
             symbol,
-            summary or "Live symbol snapshot",
+            summary or "Live market snapshot",
             detail["current_state"],
             tone=state_tone(payload.get("state")),
         )
@@ -904,9 +913,14 @@ def launch_desktop(controller, auto_start: bool = True):
 
     app = QApplication.instance() or QApplication([])
     app.setStyle("Fusion")
+    app.setApplicationName(controller.config.app.name)
+    if hasattr(app, "setApplicationDisplayName"):
+        app.setApplicationDisplayName(controller.config.app.name)
     app.setFont(QFont(FONT_FAMILY, FONT_SIZE))
     app.setStyleSheet(build_stylesheet())
 
     window = MainWindow(controller, auto_start=auto_start)
+    app.setWindowIcon(window.windowIcon())
     window.show()
     return app.exec()
+

@@ -1,4 +1,4 @@
-# OpenClaw Scanner
+# Liquidity Sniper
 
 Local desktop trading signal app cho MT5, duoc refactor theo huong production-grade nhung van chay local.
 
