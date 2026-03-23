@@ -1,9 +1,11 @@
+"""Application-layer entry points and runtime coordination exports."""
+
 from .bootstrap import main
 from .controller import AppController
-from .runtime_state import RuntimeState
-from .scanner_service import ScannerCommandService
-from .symbol_registry import SymbolRegistry
-from .telegram_bot import TelegramCommandBot
+from infra.telegram.command_bot import TelegramCommandBot
+from services.runtime_state import RuntimeState
+from services.scanner_commands import ScannerCommandService
+from services.symbol_registry import SymbolRegistry
 
 __all__ = [
     "AppController",

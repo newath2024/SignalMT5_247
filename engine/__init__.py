@@ -1,3 +1,3 @@
-from .scanner_engine import ScannerEngine
+from app.runtime import ScannerEngine
 
 __all__ = ["ScannerEngine"]

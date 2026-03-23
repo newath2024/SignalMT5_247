@@ -26,8 +26,8 @@ try:
         QTableWidgetItem,
     )
 
-    from core.constants import APP_NAME
-    from core.paths import BUNDLE_ROOT
+    from infra.config.constants import APP_NAME
+    from infra.config.paths import BUNDLE_ROOT
     from ui.presentation import (
         format_duration,
         format_cooldown,

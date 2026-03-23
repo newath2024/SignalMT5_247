@@ -1,4 +1,4 @@
-from core.enums import AlertMode, SignalStage
+from domain.enums import AlertMode, SignalStage
 
 
 class AlertService:

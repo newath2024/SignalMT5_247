@@ -1,3 +1,3 @@
-from .telegram_notifier import TelegramNotifier
+from infra.telegram import TelegramNotifier
 
 __all__ = ["TelegramNotifier"]

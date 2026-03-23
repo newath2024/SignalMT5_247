@@ -1,19 +1,17 @@
 from dataclasses import replace
 
-from core import StructuredLogger, load_app_config, save_user_config_patch
-from data import MT5DataGateway
-from engine import ScannerEngine
-from notifiers import TelegramNotifier
+from app.runtime import ScannerEngine
+from domain.strategy import StrategyEngine
+from infra.config import load_app_config, save_user_config_patch
+from infra.logging import StructuredLogger
+from infra.mt5.gateway import MT5DataGateway
+from infra.storage import SQLiteStore, StateManager
+from infra.telegram import TelegramCommandBot, TelegramNotifier
+from legacy.bridges.runtime_config import get_ob_fvg_mode, normalize_ob_fvg_mode, set_ob_fvg_mode
 from services import AlertService, ScanService
-from storage import SQLiteStore, StateManager
-from strategy import StrategyEngine
-from .runtime_state import RuntimeState
-from .scanner_service import ScannerCommandService
-from .symbol_registry import SymbolRegistry
-from .telegram_bot import TelegramCommandBot
-
-import scanner.config.htf as htf_runtime_config
-import scanner.patterns.ob as ob_runtime
+from services.runtime_state import RuntimeState
+from services.scanner_commands import ScannerCommandService
+from services.symbol_registry import SymbolRegistry
 
 
 class AppController:
@@ -68,19 +66,13 @@ class AppController:
 
     @staticmethod
     def _normalize_ob_fvg_mode(mode: str | None) -> str:
-        value = str(mode or "medium").strip().lower()
-        if value not in {"strict", "medium"}:
-            raise ValueError("OB FVG mode must be 'strict' or 'medium'.")
-        return value
+        return normalize_ob_fvg_mode(mode)
 
     def _apply_ob_fvg_mode(self, mode: str) -> str:
-        normalized = self._normalize_ob_fvg_mode(mode)
-        htf_runtime_config.HTF_OB_FVG_MODE = normalized
-        ob_runtime.HTF_OB_FVG_MODE = normalized
-        return normalized
+        return set_ob_fvg_mode(mode)
 
     def current_ob_fvg_mode(self) -> str:
-        return self._normalize_ob_fvg_mode(getattr(ob_runtime, "HTF_OB_FVG_MODE", "medium"))
+        return get_ob_fvg_mode()
 
     def set_ob_fvg_mode(self, mode: str, persist: bool = True):
         try:
