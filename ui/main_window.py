@@ -89,6 +89,7 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self._symbol_rows: list[dict] = []
         self._last_snapshot: dict | None = None
         self._pulse_on = False
+        self._active_symbol: str | None = None
 
         self.setWindowTitle(f"{controller.config.app.name} v{controller.config.app.version}")
         self.resize(1600, 980)
@@ -126,7 +127,7 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.export_log_button = self.command_bar.export_log_button
 
         self.actionable_only_checkbox = QCheckBox("Show only setups with edge")
-        self.symbol_count_label = QLabel("Watching 0/0 markets")
+        self.symbol_count_label = QLabel("Tracking 0/0 markets")
         self.symbol_count_label.setProperty("uiClass", "meta")
 
         self.log_filter = QComboBox()
@@ -199,6 +200,7 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
 
         self._build_ui()
         self._wire_events()
+        self.inspector.clear()
 
         self._snapshot_timer = QTimer(self)
         self._snapshot_timer.timeout.connect(self.refresh_snapshot)
@@ -253,8 +255,24 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        left_splitter = QSplitter(Qt.Vertical)
+        left_splitter.setChildrenCollapsible(False)
+        left_splitter.setHandleWidth(1)
+        left_splitter.addWidget(self._build_symbol_tab())
+        left_splitter.addWidget(self._build_secondary_panel())
+        left_splitter.setStretchFactor(0, 7)
+        left_splitter.setStretchFactor(1, 3)
+        layout.addWidget(left_splitter)
+        return container
+
+    def _build_secondary_panel(self) -> QWidget:
+        container = QWidget()
+        container.setProperty("uiClass", "surface")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, SPACE_4, 0, 0)
+        layout.setSpacing(0)
+
         tabs = QTabWidget()
-        tabs.addTab(self._build_symbol_tab(), "Market Radar")
         tabs.addTab(self._build_watch_tab(), "Target Pipeline")
         tabs.addTab(self._build_alert_tab(), "Alert Feed")
         tabs.addTab(self._build_activity_tab(), "Telemetry")
@@ -279,21 +297,21 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
     def _build_symbol_tab(self) -> QWidget:
         card, layout = self._build_panel_card(
             "Market Radar",
-            "Live HTF/LTF sweep view across the hunting list, with the cleanest setups rising above the noise.",
+            "Scan every market first, then click a row to load the selected target context on the right.",
         )
         top_row = QHBoxLayout()
         top_row.setSpacing(SPACE_3)
         top_row.addWidget(self.actionable_only_checkbox)
         top_row.addWidget(self.symbol_count_label)
         top_row.addStretch(1)
-        top_row.addWidget(self._legend_badge("Standby", "neutral"))
-        top_row.addWidget(self._legend_badge("Tracking", "warning"))
-        top_row.addWidget(self._legend_badge("Locked Target", "success"))
-        top_row.addWidget(self._legend_badge("Invalid / No Edge", "muted"))
+        top_row.addWidget(self._legend_badge("Setup Developing", "warning"))
+        top_row.addWidget(self._legend_badge("Awaiting Trigger", "warning"))
+        top_row.addWidget(self._legend_badge("Armed", "success"))
+        top_row.addWidget(self._legend_badge("No Valid Setup", "muted"))
         layout.addLayout(top_row)
 
         self.symbol_table.setHorizontalHeaderLabels(
-            ["Market", "Status", "HTF Thesis", "Focus", "TF", "Price", "Priority", "Updated"]
+            ["Market", "State", "HTF Thesis", "Readiness", "TF", "Price", "Priority", "Updated"]
         )
         self._configure_table(self.symbol_table, stretch_column=3, badge_columns=(1, 6))
         layout.addWidget(self.symbol_table, 1)
@@ -368,9 +386,11 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.log_filter.currentIndexChanged.connect(self.refresh_activity_log)
         self.log_symbol_filter.textChanged.connect(self.refresh_activity_log)
         self.actionable_only_checkbox.stateChanged.connect(self._refresh_symbol_table_view)
-        self.symbol_table.itemSelectionChanged.connect(self.update_symbol_inspector)
+        self.symbol_table.itemSelectionChanged.connect(self._handle_target_selection_changed)
 
     def _selected_symbol(self) -> str | None:
+        if self._active_symbol:
+            return self._active_symbol
         row = self.symbol_table.currentRow()
         if row < 0 or row >= len(self._symbol_rows):
             return None
@@ -596,19 +616,20 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.stop_button.setToolTip(stop_tooltip)
 
     def _fill_symbol_table(self, rows: list[dict]) -> None:
-        selected_symbol = self._selected_symbol()
+        selected_symbol = self._active_symbol
         display_rows = sort_symbol_rows(rows)
         total_rows = len(display_rows)
         if self.actionable_only_checkbox.isChecked():
             display_rows = [item for item in display_rows if is_actionable_symbol(item)]
         self._symbol_rows = display_rows
-        self.symbol_count_label.setText(f"Watching {len(display_rows)}/{total_rows} markets")
+        self.symbol_count_label.setText(f"Tracking {len(display_rows)}/{total_rows} markets")
 
         signal_state = self.symbol_table.blockSignals(True)
         self.symbol_table.setUpdatesEnabled(False)
         try:
             self.symbol_table.clearSelection()
             self.symbol_table.setRowCount(len(display_rows))
+            top_symbols = {item.get("symbol") for item in display_rows[:3]}
             for row_index, item in enumerate(display_rows):
                 state = item.get("state", "idle")
                 priority = get_priority_label(item)
@@ -634,7 +655,14 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
                     self.symbol_table.setItem(row_index, column_index, cell)
 
                 self._paint_row(self.symbol_table, row_index, state)
-                self._emphasize_row(self.symbol_table, row_index, priority, item)
+                self._emphasize_row(
+                    self.symbol_table,
+                    row_index,
+                    priority,
+                    item,
+                    rank=row_index,
+                    top_symbols=top_symbols,
+                )
         finally:
             self.symbol_table.setUpdatesEnabled(True)
             self.symbol_table.blockSignals(signal_state)
@@ -734,6 +762,15 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             )
         self.log_view.setPlainText("\n".join(lines[-150:]))
 
+    def _handle_target_selection_changed(self) -> None:
+        row = self.symbol_table.currentRow()
+        if row < 0 or row >= len(self._symbol_rows):
+            self._active_symbol = None
+            self.inspector.clear()
+            return
+        self._active_symbol = self._symbol_rows[row].get("symbol")
+        self.update_symbol_inspector()
+
     def update_symbol_inspector(self) -> None:
         row = self.symbol_table.currentRow()
         if row < 0 or row >= len(self._symbol_rows):
@@ -790,13 +827,17 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             field.set_value(str(value or "--"), tone=tone, monospace=monospace)
 
     def _restore_symbol_selection(self, display_rows: list[dict], selected_symbol: str | None) -> None:
-        if selected_symbol:
-            for row_index, item in enumerate(display_rows):
-                if item.get("symbol") == selected_symbol:
-                    self.symbol_table.selectRow(row_index)
-                    return
-        if display_rows and self.symbol_table.currentRow() < 0:
-            self.symbol_table.selectRow(0)
+        if not selected_symbol:
+            self.symbol_table.clearSelection()
+            self._active_symbol = None
+            return
+        for row_index, item in enumerate(display_rows):
+            if item.get("symbol") == selected_symbol:
+                self.symbol_table.selectRow(row_index)
+                self._active_symbol = selected_symbol
+                return
+        self.symbol_table.clearSelection()
+        self._active_symbol = None
 
     def _refresh_symbol_table_view(self) -> None:
         if not self._last_snapshot:
@@ -814,7 +855,16 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
                 item.setBackground(palette["background"])
             item.setForeground(palette["foreground"])
 
-    def _emphasize_row(self, table: ModernTableWidget, row_index: int, priority: str, item: dict) -> None:
+    def _emphasize_row(
+        self,
+        table: ModernTableWidget,
+        row_index: int,
+        priority: str,
+        item: dict,
+        *,
+        rank: int,
+        top_symbols: set[str],
+    ) -> None:
         if priority == "High":
             font = QFont(FONT_FAMILY, FONT_SIZE)
             font.setBold(True)
@@ -822,6 +872,16 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
                 current_item = table.item(row_index, column_index)
                 if current_item is not None:
                     current_item.setFont(font)
+
+        if item.get("symbol") in top_symbols and priority in {"High", "Medium"}:
+            lead_font = QFont(FONT_FAMILY, FONT_SIZE)
+            lead_font.setBold(True)
+            if rank == 0:
+                lead_font.setPointSize(FONT_SIZE + 1)
+            for column_index in {0, 1, 3}:
+                current_item = table.item(row_index, column_index)
+                if current_item is not None:
+                    current_item.setFont(lead_font)
 
         if is_recent(item.get("last_alert_time")) and item.get("state") in {"confirmed", "cooldown"}:
             accent_font = QFont(FONT_FAMILY, FONT_SIZE)

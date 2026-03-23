@@ -10,6 +10,7 @@ from domain.detectors.ltf import (
 from domain.enums import SetupPhase, SetupState
 
 from .reasoning import (
+    bias_label,
     build_detail_payload,
     compute_setup_score,
     derive_htf_bias,
@@ -158,15 +159,26 @@ class StrategyEngine:
             selected_watch = retained_watches[0]
 
         selected_rejection = rejections[0] if rejections else None
-        score, grade, score_components = compute_setup_score(primary_context, selected_watch, confirmed_signal)
+        display_context = primary_context
+        if selected_watch is not None and selected_watch.get("context"):
+            display_context = selected_watch.get("context")
+        elif confirmed_signal is not None and confirmed_signal.get("context"):
+            display_context = confirmed_signal.get("context")
+        elif selected_rejection is not None:
+            rejection_bias = selected_rejection.get("bias")
+            if rejection_bias in {"Long", "Short"}:
+                display_context = contexts.get(rejection_bias) or primary_context
+
         htf_context = (
             confirmed_signal.get("htf_context")
             if confirmed_signal is not None
             else selected_watch.get("htf_context")
             if selected_watch is not None
-            else format_context_label(primary_context)
+            else format_context_label(display_context)
         )
-        htf_bias_display = htf_bias
+        htf_bias_display = bias_label((display_context or {}).get("bias")) if display_context else htf_bias
+        if htf_bias_display == "neutral":
+            htf_bias_display = htf_bias
 
         if confirmed_signal is not None:
             state = SetupState.CONFIRMED.value
@@ -230,10 +242,12 @@ class StrategyEngine:
             waiting_for = "HTF context"
             active_watch_id = None
 
+        score, grade, score_components = compute_setup_score(display_context, selected_watch, confirmed_signal)
+
         detail = build_detail_payload(
             state=state,
             htf_bias=htf_bias_display,
-            primary_context=primary_context,
+            primary_context=display_context,
             active_watch=selected_watch,
             confirmed_signal=confirmed_signal,
             rejection=selected_rejection,

@@ -273,11 +273,20 @@ def build_stylesheet() -> str:
     QFrame#PanelCard,
     QFrame#StatCard,
     QFrame#SectionCard,
-    QFrame#CommandBar,
-    QFrame#InspectorPanel {{
+    QFrame#CommandBar {{
         background: {BACKGROUND_CARD};
         border: 1px solid {BORDER_SUBTLE};
         border-radius: {RADIUS_LG}px;
+    }}
+    QFrame#InspectorPanel {{
+        background: {BACKGROUND_ELEVATED};
+        border: 1px solid {rgba(BORDER_SUBTLE, 0.88)};
+        border-radius: {RADIUS_LG}px;
+    }}
+    QFrame#InspectorPlaceholder {{
+        background: {rgba(ACCENT_SLATE, 0.06)};
+        border: 1px dashed {rgba(BORDER_STRONG, 0.50)};
+        border-radius: {RADIUS_MD}px;
     }}
     QWidget[uiClass="surface"] {{
         background: transparent;
@@ -297,6 +306,11 @@ def build_stylesheet() -> str:
     QLabel[uiClass="heroTitle"] {{
         color: {TEXT_PRIMARY};
         font-size: 25px;
+        font-weight: 700;
+    }}
+    QLabel[uiClass="inspectorTitle"] {{
+        color: {TEXT_PRIMARY};
+        font-size: 20px;
         font-weight: 700;
     }}
     QLabel[uiClass="subtitle"] {{
@@ -510,6 +524,16 @@ def build_stylesheet() -> str:
         selection-background-color: {rgba(ACCENT_BLUE, 0.24)};
         selection-color: {TEXT_PRIMARY};
         outline: 0;
+    }}
+    QTableWidget#MarketTable::item:selected {{
+        background: {rgba(ACCENT_BLUE, 0.26)};
+        border-top: 1px solid {rgba(ACCENT_BLUE, 0.64)};
+        border-bottom: 1px solid {rgba(ACCENT_BLUE, 0.64)};
+    }}
+    QTableWidget#CompactTable::item:selected {{
+        background: {rgba(ACCENT_BLUE, 0.16)};
+        border-top: 1px solid {rgba(ACCENT_BLUE, 0.42)};
+        border-bottom: 1px solid {rgba(ACCENT_BLUE, 0.42)};
     }}
     QHeaderView::section {{
         background: {BACKGROUND_CARD_ALT};

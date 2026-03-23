@@ -439,11 +439,11 @@ class InspectorPanel(PanelCard):
 
         header = QVBoxLayout()
         header.setSpacing(4)
-        title = QLabel("Target Brief")
+        title = QLabel("Target Detail")
         title.setProperty("uiClass", "eyebrow")
-        self.symbol_label = QLabel("No market selected")
-        self.symbol_label.setProperty("uiClass", "heroTitle")
-        self.summary_label = QLabel("Select a market to inspect the live HTF/LTF targeting state.")
+        self.symbol_label = QLabel("No active target")
+        self.symbol_label.setProperty("uiClass", "inspectorTitle")
+        self.summary_label = QLabel("Select a market from Market Radar to inspect the live HTF/LTF setup context.")
         self.summary_label.setProperty("uiClass", "subtitle")
         self.status_badge = StatusBadge("Standby")
 
@@ -460,6 +460,21 @@ class InspectorPanel(PanelCard):
         divider.setFrameShape(QFrame.HLine)
         divider.setStyleSheet("QFrame { color: rgba(255, 255, 255, 0.06); background: rgba(255, 255, 255, 0.06); max-height: 1px; }")
         root.addWidget(divider)
+
+        self.placeholder_card = PanelCard(object_name="InspectorPlaceholder")
+        placeholder_layout = QVBoxLayout(self.placeholder_card)
+        placeholder_layout.setContentsMargins(SPACE_4, SPACE_5, SPACE_4, SPACE_5)
+        placeholder_layout.setSpacing(SPACE_2)
+        placeholder_title = QLabel("Radar-first workflow")
+        placeholder_title.setProperty("uiClass", "sectionTitle")
+        placeholder_copy = QLabel(
+            "Review the market radar first. Click any market to load HTF bias, liquidity interaction, and LTF execution detail here."
+        )
+        placeholder_copy.setWordWrap(True)
+        placeholder_copy.setProperty("uiClass", "sectionHint")
+        placeholder_layout.addWidget(placeholder_title)
+        placeholder_layout.addWidget(placeholder_copy)
+        root.addWidget(self.placeholder_card)
 
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -490,9 +505,15 @@ class InspectorPanel(PanelCard):
         self.symbol_label.setText(symbol)
         self.summary_label.setText(summary)
         self.status_badge.set_badge(state_label, tone=tone)
+        self.placeholder_card.hide()
+        self.scroll.show()
 
     def clear(self) -> None:
-        self.set_header("No market selected", "Select a market to inspect the live HTF/LTF targeting state.", "Standby", "neutral")
+        self.symbol_label.setText("No active target")
+        self.summary_label.setText("Select a market from Market Radar to inspect the live HTF/LTF setup context.")
+        self.status_badge.set_badge("Standby", tone="neutral")
+        self.placeholder_card.show()
+        self.scroll.hide()
         for field in self.fields.values():
             field.set_value("--")
 

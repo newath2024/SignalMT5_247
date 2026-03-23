@@ -12,35 +12,35 @@ STATE_META = {
         "severity": "neutral",
     },
     "context_found": {
-        "label": "Tracking",
+        "label": "Setup Developing",
         "bg": "#fef3c7",
         "fg": "#92400e",
         "icon": "🟡",
         "severity": "watch",
     },
     "watch_armed": {
-        "label": "Locked Target",
+        "label": "Armed",
         "bg": "#dcfce7",
         "fg": "#166534",
         "icon": "🟢",
         "severity": "watch",
     },
     "armed": {
-        "label": "Locked Target",
+        "label": "Armed",
         "bg": "#dcfce7",
         "fg": "#166534",
         "icon": "🟢",
         "severity": "watch",
     },
     "setup_building": {
-        "label": "Tracking",
+        "label": "Awaiting Trigger",
         "bg": "#fde68a",
         "fg": "#92400e",
         "icon": "🟡",
         "severity": "watch",
     },
     "waiting_mss": {
-        "label": "Tracking MSS",
+        "label": "Awaiting MSS",
         "bg": "#fde68a",
         "fg": "#92400e",
         "icon": "🟡",
@@ -75,7 +75,7 @@ STATE_META = {
         "severity": "neutral",
     },
     "rejected": {
-        "label": "Invalid / No Edge",
+        "label": "No Valid Setup",
         "bg": "#fee2e2",
         "fg": "#991b1b",
         "icon": "🔴",
@@ -253,20 +253,20 @@ def format_symbol_focus(row: dict | None) -> str:
     if state in {"confirmed", "entry_ready"}:
         return "Target locked"
     if state in {"armed", "watch_armed"}:
-        return "Target locked"
+        return "Execution plan armed"
     if state in {"waiting_mss", "setup_building"}:
-        return "Tracking MSS after sweep"
+        return "Awaiting MSS confirmation"
     if state == "context_found":
-        return "Tracking LTF sweep" if "ltf sweep" in reason.lower() else "Tracking HTF trigger"
+        return "Awaiting liquidity sweep (LTF)" if "ltf sweep" in reason.lower() else "Awaiting HTF trigger"
     if state == "rejected":
         if "strict ifvg" in reason.lower():
-            return "No strict iFVG"
-        return reason.replace("rejected:", "").strip() or "No edge"
+            return "No valid iFVG confirmation"
+        return reason.replace("rejected:", "").strip() or "No valid setup"
     if state == "cooldown":
         return "Cooldown"
     if state == "error":
         return "Operator attention"
-    return "No edge yet"
+    return "No valid setup"
 
 
 def get_priority_meta(row: dict | None) -> dict[str, str | int | bool]:
@@ -291,10 +291,30 @@ def is_actionable_symbol(row: dict | None) -> bool:
 
 def sort_symbol_rows(rows: list[dict] | None) -> list[dict]:
     items = list(rows or [])
+
+    def _readiness_rank(item: dict) -> int:
+        state = str(item.get("state") or "").lower()
+        if state in {"confirmed", "entry_ready", "alerted"}:
+            return 0
+        if state in {"armed", "watch_armed"}:
+            return 1
+        if state in {"waiting_mss", "setup_building"}:
+            return 2
+        if state == "context_found":
+            return 3
+        if state in {"cooldown"}:
+            return 4
+        if state in {"rejected", "expired"}:
+            return 6
+        if state == "error":
+            return 7
+        return 5
+
     return sorted(
         items,
         key=lambda item: (
             int(get_priority_meta(item)["rank"]),
+            _readiness_rank(item),
             -float(item.get("score") or 0.0),
             -_timestamp_value(item.get("last_update")),
             str(item.get("symbol") or ""),
