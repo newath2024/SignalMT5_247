@@ -19,5 +19,5 @@ if not defined PYTHON_EXE (
   exit /b 1
 )
 
-"%PYTHON_EXE%" "%ROOT%tools\portable\launch_portable.py"
+"%PYTHON_EXE%" "%ROOT%scripts\portable\launch_portable.py"
 exit /b %errorlevel%

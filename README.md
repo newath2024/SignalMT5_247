@@ -1,94 +1,112 @@
 # Liquidity Sniper
 
-Local desktop trading signal app cho MT5, duoc refactor theo huong production-grade nhung van chay local.
-
-Logic detect hien tai duoc giu nguyen trong [`scanner/`](./scanner). Lop moi chi bo sung architecture, UI desktop, persistent state, logging, SQLite history, va packaging.
+Local desktop trading signal app for MT5. The trading and scanner behavior stays the same, but the repository is now organized around clear application, domain, infrastructure, UI, and legacy boundaries.
 
 ## Strategy
 
 - HTF: `H1`, `H4`
-- HTF context: `OB`, `FVG`, `Previous Day High/Low`, `Previous Week High/Low`
+- HTF context: `OB`, `FVG`, `Previous Day High/Low`, `Previous Week High/Low`, session liquidity
 - LTF: `M3`, `M5`, `M15`
 - LTF confirmation: liquidity sweep + MSS + strict iFVG
 - Entry: first edge of iFVG
-- SL: high/low cua candle tao ra iFVG
+- SL: high/low of the origin candle
 - Alerts: Telegram
 
-## App Features
+## Features
 
-- Desktop UI bang `PySide6`
-- Scanner engine chay thread rieng, UI khong block
-- 2-stage pipeline: `WATCH ARMED` -> `CONFIRMED SIGNAL`
-- Persistent state sau restart
-- SQLite history cho signals, alerts, rejection history
-- Structured logging ra console va `logs/app.log`
-- Cooldown + dedup theo signal key
-- Build duoc ra portable `.exe` va installer Windows
+- Desktop UI built with `PySide6`
+- Scanner engine runs off the UI thread
+- 2-stage flow: `WATCH ARMED` -> `CONFIRMED SIGNAL`
+- Persistent runtime state after restart
+- SQLite history for signals, alerts, and rejections
+- Structured logs to console and `logs/app.log`
+- Cooldown and signal-key deduplication
+- Portable MT5 launcher flow for Windows deployments
+- Build outputs for portable `.exe` and Windows installer
 
-## Architecture
+## Repository Layout
 
-- [`ui/`](./ui) -> desktop UI
-- [`app/`](./app) -> app controller va bootstrap
-- [`engine/`](./engine) -> scanner engine
-- [`data/`](./data) -> MT5 gateway
-- [`detectors/`](./detectors) -> wrapper detect thuần quanh logic cu
-- [`strategy/`](./strategy) -> ghep HTF + LTF + signal pipeline
-- [`services/`](./services) -> scan service, alert orchestration
-- [`storage/`](./storage) -> SQLite + runtime state
-- [`notifiers/`](./notifiers) -> Telegram notifier
-- [`core/`](./core) -> config, paths, logging, enums
-- [`scanner/`](./scanner) -> legacy strategy logic goc
+- [`app/`](./app) -> application bootstrap, controller wiring, runtime coordination
+- [`app/runtime/`](./app/runtime) -> scanner engine runtime loop
+- [`domain/`](./domain) -> detectors, strategy engine, reasoning, domain models and enums
+- [`infra/config/`](./infra/config) -> config loading, constants, runtime path helpers
+- [`infra/mt5/`](./infra/mt5) -> MT5 runtime lifecycle and data gateway adapters
+- [`infra/storage/`](./infra/storage) -> SQLite and runtime state persistence
+- [`infra/telegram/`](./infra/telegram) -> Telegram transport integrations
+- [`services/`](./services) -> orchestration use cases such as scanning, alerts, and command services
+- [`ui/`](./ui) -> PySide6 desktop presentation layer
+- [`legacy/scanner/`](./legacy/scanner) -> original scanner pipeline kept during migration
+- [`scanner/`](./scanner) -> compatibility shim forwarding old `scanner.*` imports into `legacy/scanner/`
+- [`scripts/`](./scripts) -> build and helper scripts
+- [`packaging/`](./packaging) -> PyInstaller spec and installer definitions
+- [`assets/`](./assets) -> icons, branding, and version metadata
+- [`scripts/portable/`](./scripts/portable) -> portable runtime launch and health-check helpers
+- [`tools/portable/`](./tools/portable) -> backward-compatible wrappers for older portable script paths
+
+## Legacy Notes
+
+The original scanner package still exists under [`legacy/scanner/`](./legacy/scanner) because it powers the live setup pipeline and remains risky to rewrite in one pass.
+
+New work should go here instead:
+
+- add or refine trading logic in [`domain/`](./domain)
+- add orchestration workflows in [`services/`](./services)
+- add adapters in [`infra/`](./infra)
+- add UI widgets or presentation changes in [`ui/`](./ui)
+
+The root [`scanner/`](./scanner) package now exists only to preserve older import paths while the migration settles.
+When new layers still need the old pipeline, they should go through [`legacy/bridges/`](./legacy/bridges) instead of importing deep legacy modules directly.
 
 ## Run
 
-Yeu cau:
+Requirements:
 
 - Windows
-- MetaTrader 5 da cai va login broker
-- Python 3.12 de build
-- `MetaTrader5` package
-- `PySide6` package neu chay tu source
+- MetaTrader 5 installed or bundled in portable mode and logged in to the broker
+- Python 3.12 to run from source or build
+- `MetaTrader5`
+- `PySide6`
 
-Chay desktop app:
+Run the desktop app:
 
 ```bash
 python main.py
 ```
 
-Chay bundle portable Windows:
+Run the portable Windows bundle:
 
 ```text
 run.bat
 ```
 
-Huong dan portable day du:
-
-```text
-prepare_portable.md
-```
-
-Mo app nhung chua auto start scanner:
+Open the app without auto-starting the scanner:
 
 ```bash
 python main.py --no-autostart
 ```
 
-Chay 1 scan cycle roi thoat:
+Run one scan cycle and exit:
 
 ```bash
 python main.py --once
 ```
 
-Chay headless:
+Run headless:
 
 ```bash
 python main.py --headless
 ```
 
-Override loop interval:
+Override the loop interval:
 
 ```bash
 python main.py --interval 30
+```
+
+Portable deployment instructions:
+
+```text
+prepare_portable.md
 ```
 
 ## Config
@@ -97,7 +115,7 @@ python main.py --interval 30
 - User override: [`config/user.json`](./config/user.json)
 - Secrets: `.env`
 
-Config hien tai chi support:
+Current config assumptions:
 
 - `entry_model = ifvg_first_edge`
 - `sl_model = origin_candle_extreme`
@@ -105,7 +123,7 @@ Config hien tai chi support:
 
 ## Runtime Data
 
-Luc app chay, no se tao runtime folders tai:
+By default the app creates runtime folders at:
 
 ```text
 %LOCALAPPDATA%\OpenClaw\
@@ -114,7 +132,7 @@ Luc app chay, no se tao runtime folders tai:
   logs\
 ```
 
-Thu muc nay chua:
+Those hold:
 
 - `config/.env`
 - `config/user.json`
@@ -122,7 +140,7 @@ Thu muc nay chua:
 - `data/history.db`
 - `logs/app.log`
 
-Khi chay bang `run.bat`, launcher se set portable runtime paths vao chinh bundle:
+When launched via `run.bat`, the portable launcher redirects runtime paths into the bundle:
 
 ```text
 project_root\runtime\
@@ -131,13 +149,15 @@ project_root\logs\
 
 ## Build
 
-Build portable exe:
+Root build commands remain available for compatibility, but the real build assets now live under [`scripts/`](./scripts) and [`packaging/`](./packaging).
+
+Build the portable exe:
 
 ```bash
 powershell -ExecutionPolicy Bypass -File .\build_exe.ps1
 ```
 
-Build installer:
+Build the installer:
 
 ```bash
 powershell -ExecutionPolicy Bypass -File .\build_installer.ps1
@@ -150,6 +170,6 @@ Outputs:
 
 ## Notes
 
-- Scanner se khong crash toan app neu 1 symbol loi.
-- Telegram la optional, nhung MT5 la bat buoc.
-- Ban co the reset runtime state bang [`reset_state.bat`](./reset_state.bat) hoac `ResetScannerState.bat` trong bundle portable.
+- The scanner retries around temporary MT5 readiness issues instead of killing the whole app immediately.
+- Telegram is optional, but MT5 is required.
+- Runtime state can be reset with [`reset_state.bat`](./reset_state.bat) or `ResetScannerState.bat` inside the portable bundle.

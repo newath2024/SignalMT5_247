@@ -15,7 +15,7 @@ project_root/
     config/
     data/
   logs/
-  tools/
+  scripts/
     portable/
       launch_portable.py
       health_check.py
@@ -203,7 +203,7 @@ first_run_check.bat
 Or manually:
 
 ```text
-.\.venv\Scripts\python.exe .\tools\portable\health_check.py --launch
+.\.venv\Scripts\python.exe .\scripts\portable\health_check.py --launch
 ```
 
 This verifies:

@@ -13,6 +13,6 @@ if not defined PYTHON_EXE (
   exit /b 1
 )
 
-"%PYTHON_EXE%" "%ROOT%tools\portable\health_check.py" --launch
+"%PYTHON_EXE%" "%ROOT%scripts\portable\health_check.py" --launch
 pause
 exit /b %errorlevel%
