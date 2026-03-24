@@ -62,6 +62,20 @@ class StrategyEngine:
         self.trigger_timeframes = list(trigger_timeframes)
 
     @staticmethod
+    def _directional_context_rank(item: dict | None) -> tuple[int, int, int, float]:
+        zone = (item or {}).get("zone") or {}
+        tier = str(zone.get("tier") or (item or {}).get("tier") or "C").upper()
+        tier_rank = 3 if tier == "A" else 2 if tier == "B" else 1
+        strength = str((item or {}).get("context_strength") or zone.get("context_strength") or "").lower()
+        strength_rank = 3 if strength == "strong" else 2 if strength == "moderate" else 1 if strength == "weak" else 0
+        return (
+            1 if (item or {}).get("rollover_active") else 0,
+            tier_rank,
+            strength_rank,
+            float((item or {}).get("score") or 0.0),
+        )
+
+    @staticmethod
     def _phase_for_watch_status(status: str | None) -> str:
         status = str(status or "").lower()
         if status in {SetupState.ARMED.value, SetupState.TRIGGERED.value}:
@@ -129,10 +143,7 @@ class StrategyEngine:
         best_directional_context = (
             max(
                 directional_contexts,
-                key=lambda item: (
-                    1 if item.get("rollover_active") else 0,
-                    float(item.get("score") or 0.0),
-                ),
+                key=self._directional_context_rank,
             )
             if directional_contexts
             else None
@@ -260,7 +271,18 @@ class StrategyEngine:
             waiting_for = "sweep"
             active_watch_id = None
         elif primary_context is not None:
-            state = SetupState.HTF_CONTEXT_FOUND.value
+            zone = primary_context.get("zone", {}) or {}
+            tier = str(zone.get("tier") or primary_context.get("tier") or "C").upper()
+            context_strength = str(primary_context.get("context_strength") or zone.get("context_strength") or "weak").lower()
+            if tier == "C":
+                if bool(primary_context.get("no_structural_backing")):
+                    state = SetupState.NO_STRUCTURAL_BACKING.value
+                else:
+                    state = SetupState.SESSION_ONLY_CONTEXT.value
+            elif context_strength == "weak":
+                state = SetupState.HTF_WEAK_CONTEXT.value
+            else:
+                state = SetupState.HTF_CONTEXT_FOUND.value
             phase = SetupPhase.HTF_CONTEXT.value
             reason = describe_context_wait(primary_context)
             timeframe = primary_context.get("zone", {}).get("timeframe", "-")

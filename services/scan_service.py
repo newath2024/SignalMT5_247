@@ -196,6 +196,8 @@ class ScanService:
             SetupState.AWAITING_LTF_SWEEP.value,
             SetupState.CONTEXT_FOUND.value,
             SetupState.HTF_CONTEXT_FOUND.value,
+            SetupState.HTF_WEAK_CONTEXT.value,
+            SetupState.SESSION_ONLY_CONTEXT.value,
         }:
             self.logger.watch(message, symbol=symbol, timeframe=timeframe, phase=phase, reason=reason)
         elif state == SetupState.ERROR.value:
@@ -208,6 +210,7 @@ class ScanService:
             SetupState.TWO_SIDED_LIQUIDITY_TAKEN.value,
             SetupState.AMBIGUOUS.value,
             SetupState.EXPIRED.value,
+            SetupState.NO_STRUCTURAL_BACKING.value,
         }:
             self.logger.warn(message, symbol=symbol, timeframe=timeframe, phase=phase, reason=reason)
         else:

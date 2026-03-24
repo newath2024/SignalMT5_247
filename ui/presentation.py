@@ -18,6 +18,90 @@ STATE_META = {
         "icon": "🟡",
         "severity": "watch",
     },
+    "htf_context_found": {
+        "label": "HTF Context Found",
+        "bg": "#e0f2fe",
+        "fg": "#075985",
+        "icon": "*",
+        "severity": "watch",
+    },
+    "htf_weak_context": {
+        "label": "HTF Weak Context",
+        "bg": "#fef3c7",
+        "fg": "#92400e",
+        "icon": "*",
+        "severity": "watch",
+    },
+    "session_only_context": {
+        "label": "Session Reference Only",
+        "bg": "#fef3c7",
+        "fg": "#92400e",
+        "icon": "*",
+        "severity": "watch",
+    },
+    "no_structural_backing": {
+        "label": "No Structural Backing",
+        "bg": "#fee2e2",
+        "fg": "#991b1b",
+        "icon": "*",
+        "severity": "warning",
+    },
+    "awaiting_ltf_sweep": {
+        "label": "Awaiting LTF Sweep",
+        "bg": "#fde68a",
+        "fg": "#92400e",
+        "icon": "*",
+        "severity": "watch",
+    },
+    "sweep_detected": {
+        "label": "Sweep Confirmed",
+        "bg": "#fde68a",
+        "fg": "#92400e",
+        "icon": "*",
+        "severity": "watch",
+    },
+    "awaiting_ifvg": {
+        "label": "Awaiting iFVG",
+        "bg": "#fde68a",
+        "fg": "#92400e",
+        "icon": "*",
+        "severity": "watch",
+    },
+    "triggered": {
+        "label": "Triggered",
+        "bg": "#dcfce7",
+        "fg": "#166534",
+        "icon": "*",
+        "severity": "signal",
+    },
+    "degraded": {
+        "label": "Degraded",
+        "bg": "#fef3c7",
+        "fg": "#92400e",
+        "icon": "*",
+        "severity": "warning",
+    },
+    "invalidated": {
+        "label": "Invalidated",
+        "bg": "#fee2e2",
+        "fg": "#991b1b",
+        "icon": "*",
+        "severity": "warning",
+    },
+    "two_sided_liquidity_taken": {
+        "label": "Two-Sided Sweep",
+        "bg": "#fee2e2",
+        "fg": "#991b1b",
+        "icon": "*",
+        "severity": "warning",
+    },
+    "ambiguous": {
+        "label": "Ambiguous",
+        "bg": "#f3f4f6",
+        "fg": "#4b5563",
+        "icon": "*",
+        "severity": "warning",
+    },
     "watch_armed": {
         "label": "Armed",
         "bg": "#dcfce7",
@@ -264,6 +348,12 @@ def format_symbol_focus(row: dict | None) -> str:
         return "Awaiting liquidity sweep (LTF)"
     if state == "htf_context_found":
         return "HTF context found"
+    if state == "htf_weak_context":
+        return "Low-quality HTF context"
+    if state == "session_only_context":
+        return "Session reference only"
+    if state == "no_structural_backing":
+        return "Awaiting higher timeframe confirmation"
     if state == "degraded":
         return "Narrative degraded"
     if state == "two_sided_liquidity_taken":
@@ -318,7 +408,7 @@ def sort_symbol_rows(rows: list[dict] | None) -> list[dict]:
             return 2
         if state in {"waiting_mss", "setup_building", "sweep_detected"}:
             return 2
-        if state in {"context_found", "htf_context_found", "awaiting_ltf_sweep"}:
+        if state in {"context_found", "htf_context_found", "awaiting_ltf_sweep", "htf_weak_context", "session_only_context", "no_structural_backing"}:
             return 3
         if state in {"cooldown"}:
             return 4

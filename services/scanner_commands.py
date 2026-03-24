@@ -266,8 +266,8 @@ class ScannerCommandService:
                 SetupState.AWAITING_IFVG.value,
             }
         ]
-        context_only = [item["symbol"] for item in results if item.get("state") in {SetupState.CONTEXT_FOUND.value, SetupState.HTF_CONTEXT_FOUND.value, SetupState.AWAITING_LTF_SWEEP.value}]
-        rejected = [item["symbol"] for item in results if item.get("state") in {SetupState.REJECTED.value, SetupState.DEGRADED.value, SetupState.INVALIDATED.value, SetupState.TWO_SIDED_LIQUIDITY_TAKEN.value, SetupState.AMBIGUOUS.value}]
+        context_only = [item["symbol"] for item in results if item.get("state") in {SetupState.CONTEXT_FOUND.value, SetupState.HTF_CONTEXT_FOUND.value, SetupState.AWAITING_LTF_SWEEP.value, SetupState.HTF_WEAK_CONTEXT.value, SetupState.SESSION_ONLY_CONTEXT.value}]
+        rejected = [item["symbol"] for item in results if item.get("state") in {SetupState.REJECTED.value, SetupState.DEGRADED.value, SetupState.INVALIDATED.value, SetupState.TWO_SIDED_LIQUIDITY_TAKEN.value, SetupState.AMBIGUOUS.value, SetupState.NO_STRUCTURAL_BACKING.value}]
         errors = [item["symbol"] for item in results if item.get("state") == SetupState.ERROR.value]
         actionable_count = len(ready) + len(armed)
         lines = [
@@ -288,6 +288,9 @@ class ScannerCommandService:
             SetupState.IDLE.value: "Standby",
             SetupState.CONTEXT_FOUND.value: "Tracking",
             SetupState.HTF_CONTEXT_FOUND.value: "HTF Context Found",
+            SetupState.HTF_WEAK_CONTEXT.value: "HTF Weak Context",
+            SetupState.SESSION_ONLY_CONTEXT.value: "Session Only Context",
+            SetupState.NO_STRUCTURAL_BACKING.value: "No Structural Backing",
             SetupState.AWAITING_LTF_SWEEP.value: "Awaiting LTF Sweep",
             SetupState.ARMED.value: "Armed",
             SetupState.SWEEP_DETECTED.value: "Sweep Confirmed",

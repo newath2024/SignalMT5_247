@@ -47,14 +47,18 @@ def _context_market_bias(context: dict[str, Any] | None) -> str | None:
     return None
 
 
-def _context_priority(context: dict[str, Any] | None) -> tuple[int, int, float]:
+def _context_priority(context: dict[str, Any] | None) -> tuple[int, int, int, float]:
     directional = _context_market_bias(context) in {"Long", "Short"}
-    structural = not _is_liquidity_context(context)
+    tier = str(((context or {}).get("zone") or {}).get("tier") or (context or {}).get("tier") or "C").upper()
+    tier_rank = 3 if tier == "A" else 2 if tier == "B" else 1
+    strength = str((context or {}).get("context_strength") or "").lower()
+    strength_rank = 3 if strength == "strong" else 2 if strength == "moderate" else 1 if strength == "weak" else 0
     rollover = bool((context or {}).get("rollover_active"))
     return (
         1 if directional else 0,
+        tier_rank,
+        strength_rank,
         1 if rollover else 0,
-        1 if structural else 0,
         _context_score(context),
     )
 
@@ -130,6 +134,11 @@ def format_context_reason(context: dict[str, Any] | None) -> str:
     reaction = float(context.get("reaction_clarity") or 0.0)
     trend = str(context.get("structure_trend") or "Range")
     alignment = str(context.get("trend_alignment") or "range")
+    tier = str((zone.get("tier") or context.get("tier") or "-")).upper()
+    context_strength = str(context.get("context_strength") or zone.get("context_strength") or "unknown")
+    structural_backing = bool(context.get("has_structural_zone_nearby") or zone.get("has_structural_zone_nearby"))
+    higher_tf_backing = bool(context.get("has_higher_timeframe_backing") or zone.get("has_higher_timeframe_backing"))
+    has_confluence = bool(context.get("has_confluence") or zone.get("has_confluence"))
 
     if _is_liquidity_context(context):
         raw_state = str(context.get("liquidity_interaction_state") or "untouched")
@@ -140,9 +149,13 @@ def format_context_reason(context: dict[str, Any] | None) -> str:
         summary = (
             f"{timeframe} liquidity active at {zone.get('label', 'level')} "
             f"(state={state}, reaction={reaction_strength}/{reaction:.2f}, "
-            f"structure_bias={bias}, trend={trend}, alignment={alignment})"
+            f"structure_bias={bias}, trend={trend}, alignment={alignment}, "
+            f"tier={tier}, strength={context_strength})"
         )
         debug = []
+        debug.append(f"structural_backing={structural_backing}")
+        debug.append(f"higher_tf_backing={higher_tf_backing}")
+        debug.append(f"has_confluence={has_confluence}")
         if confirmation != "none":
             debug.append(f"confirmation={confirmation}")
         if context.get("liquidity_debug"):
@@ -153,12 +166,17 @@ def format_context_reason(context: dict[str, Any] | None) -> str:
 
     summary = (
         f"{timeframe} context active near {format_context_label(context)} "
-        f"(zone={zone_quality:.2f}, reaction={reaction:.2f}, trend={trend}, alignment={alignment})"
+        f"(zone={zone_quality:.2f}, reaction={reaction:.2f}, trend={trend}, alignment={alignment}, "
+        f"tier={tier}, strength={context_strength})"
     )
+    extras = [
+        f"structural_backing={structural_backing}",
+        f"higher_tf_backing={higher_tf_backing}",
+        f"has_confluence={has_confluence}",
+    ]
     if str(zone.get("type") or "").upper() != "FVG":
-        return summary
+        return f"{summary} | {', '.join(extras)}"
 
-    extras = []
     fvg_class = zone.get("fvg_class") or context.get("fvg_class")
     if fvg_class:
         extras.append(f"class={fvg_class}")
@@ -198,6 +216,13 @@ def describe_waiting_mss_reason(watch: dict[str, Any]) -> str:
 def describe_context_wait(primary_context: dict[str, Any] | None) -> str:
     if primary_context is None:
         return "waiting: HTF context"
+    zone = primary_context.get("zone") or {}
+    tier = str(zone.get("tier") or primary_context.get("tier") or "C").upper()
+    context_strength = str(primary_context.get("context_strength") or zone.get("context_strength") or "weak").lower()
+    if tier == "C" and not bool(primary_context.get("has_confluence")):
+        return f"waiting: session reference only at {format_context_label(primary_context)}"
+    if context_strength == "weak":
+        return f"waiting: higher timeframe confirmation near {format_context_label(primary_context)}"
     if _is_liquidity_context(primary_context) and _context_market_bias(primary_context) not in {"Long", "Short"}:
         return f"waiting: confirmation at {format_context_label(primary_context)}"
     return f"waiting: LTF sweep near {format_context_label(primary_context)}"
@@ -621,6 +646,7 @@ def build_detail_payload(
     liquidity_state = primary_context.get("liquidity_interaction_state") if primary_context else None
     market_bias = htf_bias
     reaction_strength = str((primary_context or {}).get("reaction_strength") or "-")
+    context_zone = (primary_context or {}).get("zone") or {}
     return {
         "current_state": state,
         "narrative_state": (source or {}).get("narrative_state") or narrative.get("state") or state,
@@ -631,6 +657,10 @@ def build_detail_payload(
         "htf_context": format_context_label(primary_context),
         "htf_zone_type": format_htf_zone_type(primary_context),
         "htf_zone_source": format_htf_zone_source(primary_context, snapshot),
+        "htf_tier": str(context_zone.get("tier") or (primary_context or {}).get("tier") or "-"),
+        "context_strength": str((primary_context or {}).get("context_strength") or context_zone.get("context_strength") or "-"),
+        "confluence_structural": "Yes" if bool((primary_context or {}).get("has_structural_zone_nearby") or context_zone.get("has_structural_zone_nearby")) else "No",
+        "confluence_higher_tf": "Yes" if bool((primary_context or {}).get("has_higher_timeframe_backing") or context_zone.get("has_higher_timeframe_backing")) else "No",
         "htf_context_reason": format_context_reason(primary_context),
         "last_detected_sweep": format_sweep_detail(source),
         "last_detected_mss": format_mss_detail(confirmed_signal or source),

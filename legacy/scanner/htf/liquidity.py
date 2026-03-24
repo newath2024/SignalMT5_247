@@ -292,6 +292,9 @@ def evaluate_liquidity_level(zone, snapshot, structure=None):
     structure_confirmation_reason = None
     displacement = None
     mss = {"confirmed": False, "break_index": None, "reference_swing": None}
+    tier = str(zone.get("tier") or "C")
+    structural_nearby = bool(zone.get("has_structural_zone_nearby"))
+    higher_tf_backing = bool(zone.get("has_higher_timeframe_backing"))
 
     if interaction_state == "swept_and_reclaimed":
         candidate_bias = "Long" if side == "low" else "Short"
@@ -321,6 +324,13 @@ def evaluate_liquidity_level(zone, snapshot, structure=None):
     trend_alignment = _trend_alignment(structure or {}, market_structure_bias)
     sweep_active = interaction_state in {"swept", "swept_and_reclaimed"}
     clear = sweep_active
+    directional_confirmation = bool(displacement and displacement.get("valid")) or bool(mss["confirmed"])
+    local_confluence = (
+        interaction_state == "swept_and_reclaimed"
+        and directional_confirmation
+        and trend_alignment == "aligned"
+    )
+    has_confluence = bool(zone.get("has_confluence")) or structural_nearby or higher_tf_backing or local_confluence
 
     composite = float(zone.get("quality") or 0.0) + reaction + distance_score * HTF_COMPOSITE_DISTANCE_WEIGHT
     if interaction_state == "swept":
@@ -336,12 +346,28 @@ def evaluate_liquidity_level(zone, snapshot, structure=None):
         composite += 0.05
     elif trend_alignment == "countertrend":
         composite -= 0.08
+    if tier == "C" and not has_confluence:
+        composite *= 0.82
+    context_strength = "strong" if tier == "A" else "moderate"
+    if tier == "C":
+        context_strength = "moderate" if has_confluence and directional_confirmation else "weak"
+        if not structural_nearby and not higher_tf_backing:
+            composite -= 0.25
+            context_strength = "weak"
+    elif tier == "B" and not has_confluence and trend_alignment == "countertrend":
+        context_strength = "weak"
+    zone["has_confluence"] = has_confluence
+    zone["context_strength"] = context_strength
+    zone["has_structural_zone_nearby"] = structural_nearby
+    zone["has_higher_timeframe_backing"] = higher_tf_backing
 
     debug = [
         f"level={level:.5f}",
         f"tolerance={tolerance:.5f}",
         f"state={interaction_state}",
         f"distance_score={distance_score:.2f}",
+        f"tier={tier}",
+        f"confluence={has_confluence}",
     ]
     if sweep_index is not None:
         debug.append(f"sweep_index={sweep_index}")
@@ -382,5 +408,13 @@ def evaluate_liquidity_level(zone, snapshot, structure=None):
         "mss_confirmed": bool(mss["confirmed"]),
         "mss_index": mss["break_index"],
         "structure_confirmation_reason": structure_confirmation_reason,
+        "tier": tier,
+        "is_structural": bool(zone.get("is_structural")),
+        "is_session_level": bool(zone.get("is_session_level")),
+        "has_confluence": has_confluence,
+        "has_structural_zone_nearby": structural_nearby,
+        "has_higher_timeframe_backing": higher_tf_backing,
+        "context_strength": context_strength,
+        "no_structural_backing": tier == "C" and not structural_nearby and not higher_tf_backing,
         "liquidity_debug": "; ".join(debug),
     }

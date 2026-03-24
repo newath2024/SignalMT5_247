@@ -2,6 +2,26 @@ from .filters import determine_htf_structure, evaluate_htf_zone
 from .liquidity import is_liquidity_level, liquidity_level_side, liquidity_level_value
 
 
+def _tier_rank(evaluated):
+    tier = str((evaluated.get("zone") or {}).get("tier") or evaluated.get("tier") or "C").upper()
+    if tier == "A":
+        return 3
+    if tier == "B":
+        return 2
+    return 1
+
+
+def _context_strength_rank(evaluated):
+    strength = str(evaluated.get("context_strength") or "").lower()
+    if strength == "strong":
+        return 3
+    if strength == "moderate":
+        return 2
+    if strength == "weak":
+        return 1
+    return 0
+
+
 def _context_market_bias(evaluated):
     market_bias = evaluated.get("market_structure_bias")
     if market_bias in {"Long", "Short"}:
@@ -34,14 +54,13 @@ def _liquidity_context_rank(evaluated):
 
 
 def _context_priority(evaluated):
-    zone = evaluated.get("zone") or {}
-    is_liquidity = bool(zone.get("is_liquidity_level")) or bool(evaluated.get("is_liquidity_level"))
     directional = _context_market_bias(evaluated) in {"Long", "Short"}
     rollover = bool(evaluated.get("rollover_active"))
     return (
         1 if directional else 0,
+        _tier_rank(evaluated),
+        _context_strength_rank(evaluated),
         1 if rollover else 0,
-        0 if is_liquidity else 1,
         _liquidity_context_rank(evaluated),
         float(evaluated.get("score") or 0.0),
         _interaction_index(evaluated),
@@ -102,6 +121,8 @@ def _build_rollover_context(target, origin, direction, structure):
     promoted["trend_alignment"] = _directional_alignment(structure, direction)
     promoted["clear"] = True
     promoted["rollover_active"] = True
+    promoted["has_confluence"] = True
+    promoted["context_strength"] = "moderate" if str((promoted.get("zone") or {}).get("tier") or promoted.get("tier") or "C").upper() == "C" else promoted.get("context_strength", "strong")
     promoted["rollover_from_label"] = origin["zone"]["label"]
     promoted["rollover_to_label"] = target["zone"]["label"]
     promoted["rollover_reason"] = rollover_reason
@@ -174,6 +195,11 @@ def _consider_context(best_by_bias, evaluated):
     if not evaluated.get("clear"):
         return
 
+    zone = evaluated.get("zone") or {}
+    if str(zone.get("tier") or evaluated.get("tier") or "C").upper() == "C" and not bool(evaluated.get("has_confluence")):
+        if _context_market_bias(evaluated) in {"Long", "Short"}:
+            return
+
     bucket = evaluated.get("bias") or "Neutral"
     if bucket not in best_by_bias:
         bucket = "Neutral"
@@ -195,5 +221,13 @@ def select_htf_contexts(snapshot, zones):
 
     for rollover in _find_rollover_contexts(evaluated_items, structure):
         _consider_context(best_by_bias, rollover)
+
+    for bias in ("Long", "Short"):
+        candidate = best_by_bias[bias]
+        if candidate is None:
+            continue
+        zone = candidate.get("zone") or {}
+        if str(zone.get("tier") or candidate.get("tier") or "C").upper() == "C" and not bool(candidate.get("has_confluence")):
+            best_by_bias[bias] = None
 
     return best_by_bias

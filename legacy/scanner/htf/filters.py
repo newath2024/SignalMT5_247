@@ -150,6 +150,10 @@ def evaluate_htf_zone(zone, snapshot, structure=None):
     zone_rates = zone_rates_map.get(zone_timeframe, rates_h1)
     zone_valid, invalidation_reason = _zone_invalidation_status(zone, zone_rates, len(zone_rates) - 1)
     is_fvg_zone = str(zone.get("type") or "").upper() == "FVG"
+    tier = str(zone.get("tier") or "B")
+    has_confluence = bool(zone.get("has_confluence"))
+    structural_nearby = bool(zone.get("has_structural_zone_nearby"))
+    higher_tf_backing = bool(zone.get("has_higher_timeframe_backing"))
 
     if not zone_valid:
         return {
@@ -164,6 +168,13 @@ def evaluate_htf_zone(zone, snapshot, structure=None):
             "score": -1.0,
             "valid": False,
             "invalidation_reason": invalidation_reason,
+            "tier": tier,
+            "is_structural": bool(zone.get("is_structural")),
+            "is_session_level": bool(zone.get("is_session_level")),
+            "has_confluence": has_confluence,
+            "has_structural_zone_nearby": structural_nearby,
+            "has_higher_timeframe_backing": higher_tf_backing,
+            "context_strength": "weak",
         }
 
     recent_bar_count = int(HTF_EVALUATION_RECENT_BARS.get(zone_timeframe, HTF_EVALUATION_RECENT_BARS["H1"]))
@@ -242,6 +253,18 @@ def evaluate_htf_zone(zone, snapshot, structure=None):
         composite += 0.05
     elif trend_alignment == "countertrend":
         composite -= 0.2
+    if tier == "C" and not has_confluence:
+        composite *= 0.82
+    context_strength = "strong" if tier == "A" else "moderate"
+    if tier == "B" and not has_confluence and trend_alignment == "countertrend":
+        context_strength = "weak"
+    if tier == "C":
+        context_strength = "moderate" if has_confluence and clear else "weak"
+        if not structural_nearby and not higher_tf_backing:
+            composite -= 0.25
+            context_strength = "weak"
+    zone["context_strength"] = context_strength
+    zone["has_confluence"] = has_confluence
 
     return {
         "zone": zone,
@@ -258,4 +281,12 @@ def evaluate_htf_zone(zone, snapshot, structure=None):
         "tradable": zone.get("tradable"),
         "fvg_class": zone.get("fvg_class"),
         "mitigation_status": mitigation_status,
+        "tier": tier,
+        "is_structural": bool(zone.get("is_structural")),
+        "is_session_level": bool(zone.get("is_session_level")),
+        "has_confluence": has_confluence,
+        "has_structural_zone_nearby": structural_nearby,
+        "has_higher_timeframe_backing": higher_tf_backing,
+        "context_strength": context_strength,
+        "no_structural_backing": tier == "C" and not structural_nearby and not higher_tf_backing,
     }

@@ -166,6 +166,8 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             (
                 ("htf_bias", "HTF Bias"),
                 ("htf_context", "Thesis"),
+                ("htf_tier", "Tier"),
+                ("context_strength", "Context Strength"),
                 ("htf_zone_type", "Zone Type"),
                 ("zone", "Zone"),
                 ("htf_zone_source", "Source"),
@@ -178,6 +180,8 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
                 ("market_structure_bias", "Market Bias"),
                 ("liquidity_interaction_state", "Liquidity"),
                 ("reaction_strength", "Reaction"),
+                ("confluence_structural", "Structural Backing"),
+                ("confluence_higher_tf", "Higher TF Backing"),
                 ("htf_context_reason", "Context Note"),
                 ("timeline", "Recent Timeline"),
             ),
@@ -933,12 +937,18 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         liquidity_state = str(detail.get("liquidity_interaction_state") or "").strip()
         reaction = str(detail.get("reaction_strength") or "--").strip()
         market_bias = str(detail.get("market_structure_bias") or detail.get("htf_bias") or "--").strip()
+        tier = str(detail.get("htf_tier") or "--").strip()
+        strength = str(detail.get("context_strength") or "--").strip()
+        structural = str(detail.get("confluence_structural") or "--").strip().lower()
+        higher_tf = str(detail.get("confluence_higher_tf") or "--").strip().lower()
         if liquidity_state and liquidity_state not in {"-", "Untouched"}:
             context = format_htf_context_short(payload)
-            return f"{context} | {reaction} reaction | {market_bias}"
+            if tier == "C" and structural != "yes" and higher_tf != "yes":
+                return f"{context} | no structural confluence | context weak | {market_bias}"
+            return f"{context} | tier {tier} | {strength} | {reaction} reaction | {market_bias}"
         zone_type = str(detail.get("htf_zone_type") or "").strip()
         if zone_type and zone_type != "-":
-            return f"{zone_type} | {reaction} reaction | {market_bias}"
+            return f"{zone_type} | tier {tier} | {strength} | {reaction} reaction | {market_bias}"
         return self._format_detail_text(detail.get("htf_context_reason"))
 
     def _inspector_field_tone(self, key: str, value, payload: dict) -> str | None:
@@ -957,6 +967,10 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             return liquidity_tone(text)
         if key == "reaction_strength":
             return reaction_tone(text)
+        if key in {"confluence_structural", "confluence_higher_tf"}:
+            return "success" if text.lower() == "yes" else "warning"
+        if key == "context_strength":
+            return "success" if text.lower() == "strong" else "info" if text.lower() == "moderate" else "warning"
         if key == "score":
             return "info"
         if key == "cooldown_info":
