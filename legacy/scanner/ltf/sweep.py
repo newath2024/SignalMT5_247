@@ -293,7 +293,7 @@ def detect_sweep_candidates(rates, bias, point, reference_levels):
     return candidates
 
 
-def evaluate_reclaim_quality(rates, bias, sweep_candidate, reference_levels, ifvg, point):
+def evaluate_reclaim_quality(rates, bias, sweep_candidate, reference_levels, ifvg, point, anchor_index=None):
     swept_levels = [
         float(reference_levels[label])
         for label in sweep_candidate["swept_external"]
@@ -305,9 +305,14 @@ def evaluate_reclaim_quality(rates, bias, sweep_candidate, reference_levels, ifv
     reclaimed_level = max(swept_levels) if bias == "Long" else min(swept_levels)
     reclaim_threshold = max(sweep_candidate["avg_range"] * LTF_RECLAIM_MIN_DISTANCE_RATIO, point * 2)
     sweep_index = sweep_candidate["sweep_index"]
+    if anchor_index is None:
+        if ifvg is not None:
+            anchor_index = ifvg["origin_candle_index"]
+        else:
+            anchor_index = sweep_index + LTF_RECLAIM_HOLD_BARS
     end_index = min(
         len(rates) - 1,
-        max(sweep_index + LTF_RECLAIM_HOLD_BARS, ifvg["origin_candle_index"]),
+        max(sweep_index + LTF_RECLAIM_HOLD_BARS, int(anchor_index)),
     )
     closes = rates["close"][sweep_index : end_index + 1]
     if len(closes) == 0:
@@ -336,12 +341,16 @@ def evaluate_reclaim_quality(rates, bias, sweep_candidate, reference_levels, ifv
     }
 
 
-def evaluate_post_sweep_displacement(rates, bias, sweep_candidate, ifvg, point):
+def evaluate_post_sweep_displacement(rates, bias, sweep_candidate, ifvg, point, anchor_index=None):
     start_index = sweep_candidate["sweep_index"] + 1
-    end_index = max(
-        ifvg.get("touch_index") or ifvg["source_index"],
-        ifvg["origin_candle_index"],
-    )
+    if anchor_index is None:
+        if ifvg is None:
+            return {"valid": False, "quality": 0.0}
+        anchor_index = max(
+            ifvg.get("touch_index") or ifvg["source_index"],
+            ifvg["origin_candle_index"],
+        )
+    end_index = int(anchor_index)
     if end_index < start_index:
         return {"valid": False, "quality": 0.0}
 
@@ -506,148 +515,15 @@ def is_continuation_sweep(classification):
 
 
 def detect_ltf_watch_trigger(rates, bias, current_price, point, timeframe_name, reference_levels, context):
-    candidates = []
-    best_rejection = None
-    best_rejection_score = -1.0
+    from .narrative import build_ltf_narrative, narrative_to_watch_trigger
 
-    for sweep_candidate in detect_sweep_candidates(rates, bias, point, reference_levels):
-        ifvg = find_ifvg_zone(
-            rates,
-            bias,
-            sweep_candidate["sweep_index"],
-            len(rates) - 1,
-            current_price,
-            sweep_candidate["avg_range"],
-            point,
-        )
-        if ifvg is None:
-            rejection_reason = "no strict iFVG"
-            rejection_score = sweep_candidate["sweep_quality"]
-            if rejection_score > best_rejection_score:
-                best_rejection = {
-                    "reason": rejection_reason,
-                    "debug": _build_rejection_debug(
-                        sweep_candidate,
-                        rejection_reason=rejection_reason,
-                        ifvg_inspection=_inspect_ifvg_candidates(rates, bias, sweep_candidate, current_price, point),
-                    ),
-                }
-                best_rejection_score = rejection_score
-            continue
-        if ifvg["mode"] != "strict" or ifvg["entry_quality"] < LTF_IFVG_ENTRY_MIN_QUALITY:
-            rejection_reason = "iFVG not strict enough"
-            rejection_score = sweep_candidate["sweep_quality"] + ifvg.get("quality", 0.0)
-            if rejection_score > best_rejection_score:
-                best_rejection = {
-                    "reason": rejection_reason,
-                    "debug": _build_rejection_debug(
-                        sweep_candidate,
-                        ifvg=ifvg,
-                        rejection_reason=rejection_reason,
-                        ifvg_inspection=_inspect_ifvg_candidates(rates, bias, sweep_candidate, current_price, point),
-                    ),
-                }
-                best_rejection_score = rejection_score
-            continue
-        if ifvg.get("touch_index") is None or ifvg["touch_index"] <= sweep_candidate["sweep_index"]:
-            rejection_reason = "iFVG inversion not confirmed"
-            rejection_score = sweep_candidate["sweep_quality"] + ifvg.get("quality", 0.0)
-            if rejection_score > best_rejection_score:
-                best_rejection = {
-                    "reason": rejection_reason,
-                    "debug": _build_rejection_debug(
-                        sweep_candidate,
-                        ifvg=ifvg,
-                        rejection_reason=rejection_reason,
-                        ifvg_inspection=_inspect_ifvg_candidates(rates, bias, sweep_candidate, current_price, point),
-                    ),
-                }
-                best_rejection_score = rejection_score
-            continue
-
-        reclaim = evaluate_reclaim_quality(rates, bias, sweep_candidate, reference_levels, ifvg, point)
-        ifvg_filter = is_meaningful_watch_ifvg(rates, sweep_candidate, ifvg, point)
-        displacement = evaluate_post_sweep_displacement(rates, bias, sweep_candidate, ifvg, point)
-        classification = classify_sweep_type(
-            context,
-            sweep_candidate,
-            reclaim,
-            displacement,
-            ifvg_filter,
-        )
-        if not is_reversal_sweep(classification):
-            rejection_score = (
-                sweep_candidate["sweep_quality"]
-                + ifvg.get("quality", 0.0)
-                + displacement.get("quality", 0.0)
-                + reclaim.get("quality", 0.0)
-            )
-            if rejection_score > best_rejection_score:
-                best_rejection = {
-                    "reason": classification["reason"] or "continuation sweep",
-                    "debug": _build_rejection_debug(
-                        sweep_candidate,
-                        ifvg=ifvg,
-                        rejection_reason=classification["reason"] or "continuation sweep",
-                        reclaim=reclaim,
-                        displacement=displacement,
-                        ifvg_filter=ifvg_filter,
-                        classification=classification,
-                    ),
-                }
-                best_rejection_score = rejection_score
-            continue
-
-        watch_index = max(sweep_candidate["sweep_index"], ifvg["touch_index"])
-        bars_since_watch = len(rates) - 1 - watch_index
-        if bars_since_watch > WATCH_EXPIRY_BARS[timeframe_name]:
-            rejection_reason = "watch expired before arm"
-            rejection_score = (
-                sweep_candidate["sweep_quality"]
-                + ifvg.get("quality", 0.0)
-                + displacement.get("quality", 0.0)
-            )
-            if rejection_score > best_rejection_score:
-                best_rejection = {
-                    "reason": rejection_reason,
-                    "debug": _build_rejection_debug(
-                        sweep_candidate,
-                        ifvg=ifvg,
-                        rejection_reason=rejection_reason,
-                        reclaim=reclaim,
-                        displacement=displacement,
-                        ifvg_filter=ifvg_filter,
-                        classification=classification,
-                    ),
-                }
-                best_rejection_score = rejection_score
-            continue
-
-        candidates.append(
-            {
-                **sweep_candidate,
-                "ifvg": ifvg,
-                "reclaim": reclaim,
-                "displacement": displacement,
-                "ifvg_filter": ifvg_filter,
-                "sweep_classification": classification,
-                "watch_index": watch_index,
-                "bars_since_watch": bars_since_watch,
-            }
-        )
-
-    if not candidates:
-        return None, best_rejection
-
-    candidates.sort(
-        key=lambda item: (
-            item["ifvg"]["entry_quality"]
-            + item["ifvg"]["quality"]
-            + item["sweep_quality"]
-            + item["reclaim"]["quality"]
-            + item["displacement"]["quality"],
-            item["watch_index"],
-        ),
-        reverse=True,
+    narrative = build_ltf_narrative(
+        rates,
+        bias,
+        current_price,
+        point,
+        timeframe_name,
+        reference_levels,
+        context,
     )
-    return candidates[0], None
+    return narrative_to_watch_trigger(narrative)

@@ -27,6 +27,9 @@ def build_signal(snapshot, context, trigger, trigger_timeframe, all_htf_zones):
         return None
 
     swept_liquidity = trigger["swept_external"]
+    narrative = trigger.get("narrative") or {}
+    primary_sweep = narrative.get("primary_sweep") or {}
+    opposite_sweep = narrative.get("opposite_sweep") or {}
     liquidity_map = {
         label: snapshot["reference_levels"][label]
         for label in EXTERNAL_LIQUIDITY_LEVELS[bias]
@@ -63,15 +66,20 @@ def build_signal(snapshot, context, trigger, trigger_timeframe, all_htf_zones):
         "score_components": scoring["score_components"],
         "why": [
             f"Clear HTF context at {context['zone']['label']} with visible reaction.",
-            f"{trigger_timeframe} reversal-type sweep of {liquidity_text} armed the watch with strong reclaim and strict iFVG.",
-            f"MSS is now confirmed, keeping RR at {targets['rr']:.2f}R.",
+            f"{trigger_timeframe} primary sweep {primary_sweep.get('label', liquidity_text)} formed first and led to directional displacement.",
+            f"MSS and strict iFVG aligned with the narrative, keeping RR at {targets['rr']:.2f}R.",
+            (
+                f"Opposite sweep {opposite_sweep.get('label')} also occurred, so the setup must be reviewed carefully."
+                if opposite_sweep
+                else "No opposite-side liquidity sweep degraded the setup before trigger confirmation."
+            ),
         ],
         "invalidation": invalidation,
         "expiry_minutes": SIGNAL_EXPIRY_MINUTES[trigger_timeframe],
         "digits": digits,
-        "trigger_summary": "WATCH confirmed: MSS confirmed after HTF + sweep + iFVG watch setup",
+        "trigger_summary": "TRIGGERED: narrative validated with primary sweep -> MSS -> strict iFVG",
         "watch_confirmed": True,
-        "watch_status": "WATCH confirmed",
+        "watch_status": "TRIGGERED",
         "session_note": scoring["session_note"],
         "actionability": execution["actionability"],
         "htf_zone": context["zone"],
@@ -95,4 +103,8 @@ def build_signal(snapshot, context, trigger, trigger_timeframe, all_htf_zones):
         "swept_liquidity": swept_liquidity,
         "liquidity_map": liquidity_map,
         "sweep_type": trigger.get("sweep_classification", {}).get("type", "reversal"),
+        "narrative": narrative,
+        "primary_sweep": primary_sweep,
+        "opposite_sweep": opposite_sweep,
+        "has_two_sided_sweep": bool(narrative.get("has_two_sided_sweep")),
     }
