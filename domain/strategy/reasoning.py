@@ -176,11 +176,23 @@ def format_context_reason(context: dict[str, Any] | None) -> str:
 
 
 def describe_watch_reason(watch: dict[str, Any]) -> str:
-    return f"armed: {watch.get('htf_context') or format_context_label(watch.get('context'))} + LTF sweep"
+    narrative_state = str(watch.get("narrative_state") or watch.get("status") or "").lower()
+    primary = (watch.get("primary_sweep") or {}).get("label") or "-"
+    opposite = ((watch.get("opposite_sweep") or {}) or {}).get("label")
+    if narrative_state == "armed":
+        return f"armed: {primary} primary sweep -> MSS -> strict iFVG"
+    if narrative_state == "awaiting_ifvg":
+        return f"waiting: strict iFVG after {primary} sweep and MSS"
+    if narrative_state in {"sweep_detected", "waiting_mss"}:
+        return f"waiting: MSS after primary sweep {primary}"
+    if narrative_state == "degraded" and opposite:
+        return f"degraded: primary {primary}, opposite {opposite} also swept"
+    return watch.get("status_reason") or f"watch: {watch.get('htf_context') or format_context_label(watch.get('context'))}"
 
 
 def describe_waiting_mss_reason(watch: dict[str, Any]) -> str:
-    return f"waiting: MSS after sweep on {watch.get('timeframe', '-')}"
+    primary = (watch.get("primary_sweep") or {}).get("label") or "-"
+    return f"waiting: MSS after primary sweep {primary} on {watch.get('timeframe', '-')}"
 
 
 def describe_context_wait(primary_context: dict[str, Any] | None) -> str:
@@ -233,6 +245,13 @@ def _format_price_value(value: Any) -> str:
 def format_sweep_detail(payload: dict[str, Any] | None) -> str:
     if not payload:
         return "-"
+    primary = payload.get("primary_sweep") or ((payload.get("narrative") or {}).get("primary_sweep") or {})
+    opposite = payload.get("opposite_sweep") or ((payload.get("narrative") or {}).get("opposite_sweep") or {})
+    if primary:
+        line = f"Primary sweep: {primary.get('label', '-')} @ {_format_price_value(primary.get('sweep_price'))}"
+        if opposite:
+            line += f" | Opposite: {opposite.get('label', '-')}"
+        return line
     liquidity = payload.get("swept_liquidity") or []
     liquidity_text = ", ".join(str(item) for item in liquidity) if liquidity else "internal liquidity"
     sweep_price = payload.get("sweep_price")
@@ -243,21 +262,27 @@ def format_sweep_detail(payload: dict[str, Any] | None) -> str:
 
 def format_mss_detail(signal: dict[str, Any] | None) -> str:
     if not signal:
-        return "waiting for MSS after sweep"
-    return f"MSS confirmed at index {signal.get('mss_index', '-')}"
+        return "awaiting MSS"
+    mss = signal.get("mss") or ((signal.get("narrative") or {}).get("mss") or {})
+    if mss:
+        return f"MSS confirmed at index {mss.get('mss_index', signal.get('mss_index', '-'))}"
+    if signal.get("mss_index") is not None:
+        return f"MSS confirmed at index {signal.get('mss_index', '-')}"
+    return "awaiting MSS"
 
 
 def format_ifvg_detail(payload: dict[str, Any] | None) -> str:
     if not payload:
         return "-"
-    if "entry_low" in payload and "entry_high" in payload:
-        return f"iFVG {_format_price_range(payload['entry_low'], payload['entry_high'])}"
-    ifvg = payload.get("ifvg") or {}
+    narrative = payload.get("narrative") or {}
+    ifvg = payload.get("ifvg") or narrative.get("ifvg") or {}
     low = ifvg.get("low")
     high = ifvg.get("high")
-    if low is None or high is None:
-        return "-"
-    return f"iFVG {_format_price_range(low, high)}"
+    if low is not None and high is not None:
+        return f"strict iFVG {_format_price_range(low, high)}"
+    if "entry_low" in payload and "entry_high" in payload:
+        return f"iFVG {_format_price_range(payload['entry_low'], payload['entry_high'])}"
+    return "-"
 
 
 def _format_failure_reason(reason: str | None, candidate: dict[str, Any] | None = None) -> str:
@@ -590,11 +615,15 @@ def build_detail_payload(
     snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     source = confirmed_signal or active_watch
+    narrative = (source or {}).get("narrative") or {}
+    primary_sweep = (source or {}).get("primary_sweep") or narrative.get("primary_sweep") or {}
+    opposite_sweep = (source or {}).get("opposite_sweep") or narrative.get("opposite_sweep") or {}
     liquidity_state = primary_context.get("liquidity_interaction_state") if primary_context else None
     market_bias = htf_bias
     reaction_strength = str((primary_context or {}).get("reaction_strength") or "-")
     return {
         "current_state": state,
+        "narrative_state": (source or {}).get("narrative_state") or narrative.get("state") or state,
         "htf_bias": htf_bias,
         "market_structure_bias": market_bias,
         "liquidity_interaction_state": _humanize_liquidity_state(liquidity_state),
@@ -604,8 +633,15 @@ def build_detail_payload(
         "htf_zone_source": format_htf_zone_source(primary_context, snapshot),
         "htf_context_reason": format_context_reason(primary_context),
         "last_detected_sweep": format_sweep_detail(source),
-        "last_detected_mss": format_mss_detail(confirmed_signal),
+        "last_detected_mss": format_mss_detail(confirmed_signal or source),
         "last_detected_ifvg": format_ifvg_detail(source),
+        "primary_sweep": primary_sweep.get("label", "-") if primary_sweep else "-",
+        "primary_sweep_price": _format_price_value(primary_sweep.get("sweep_price")) if primary_sweep else "-",
+        "opposite_sweep": opposite_sweep.get("label", "-") if opposite_sweep else "-",
+        "two_sided_sweep": "Yes" if bool((source or {}).get("has_two_sided_sweep") or narrative.get("has_two_sided_sweep")) else "No",
+        "narrative_quality": round(float((source or {}).get("narrative_quality") or narrative.get("narrative_quality") or 0.0), 2),
+        "narrative_reason": (source or {}).get("status_reason") or narrative.get("status_reason") or "-",
+        "invalidation_reason": (source or {}).get("invalidation_reason") or narrative.get("invalidation_reason") or "-",
         "rejection_reason": describe_rejection(rejection.get("reason")) if rejection else "-",
         "rejection_debug": format_rejection_debug(rejection),
         "last_alert_time": None,
@@ -621,5 +657,11 @@ def build_detail_payload(
         "zone_top_bottom": format_entry_zone(source),
         "score": format_score(score, grade),
         "score_components": score_components,
+        "narrative_timeline": "\n".join(
+            f"{item.get('index', '-')} {item.get('type', '-')} {item.get('label', item.get('bias', '-'))}".strip()
+            for item in (narrative.get("timeline") or [])[-6:]
+        )
+        if narrative.get("timeline")
+        else "-",
         "timeline": "-",
     }

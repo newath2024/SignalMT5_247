@@ -17,7 +17,7 @@ class AlertService:
     def handle_watch_armed(self, watch: dict) -> dict:
         stage = SignalStage.WATCH_ARMED.value
         event_key = f"watch:{watch['watch_key']}"
-        reason = watch.get("status_reason") or "armed: HTF context valid + LTF sweep"
+        reason = watch.get("status_reason") or "armed: narrative ready after primary sweep"
 
         if not self.state_manager.has_signal_event(stage, watch["watch_key"]):
             self.state_manager.record_signal_event(
@@ -98,7 +98,7 @@ class AlertService:
     def handle_confirmed_signal(self, snapshot: dict, signal: dict) -> dict:
         stage = SignalStage.CONFIRMED_SIGNAL.value
         event_key = f"signal:{signal['setup_key']}"
-        reason = "confirmed: MSS + strict iFVG"
+        reason = "triggered: narrative ready with MSS + strict iFVG"
 
         if not self.state_manager.has_signal_event(stage, signal["setup_key"]):
             self.state_manager.record_signal_event(

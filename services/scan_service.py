@@ -120,24 +120,49 @@ class ScanService:
         for watch in watches:
             stamp = watch.get("armed_at") or _now_iso()
             watch_key = watch.get("watch_key", symbol)
+            primary = watch.get("primary_sweep") or {}
+            opposite = watch.get("opposite_sweep") or {}
+            narrative = watch.get("narrative") or {}
+            primary_label = primary.get("label", "-")
             self.state_manager.record_timeline_event(
                 symbol=symbol,
                 event="sweep",
-                label=f"{watch.get('timeframe', '-')} sweep detected",
+                label=f"{watch.get('timeframe', '-')} primary sweep: {primary_label}",
                 phase=SetupPhase.LTF_SWEEP.value,
-                state=SetupState.ARMED.value,
+                state=watch.get("status") or SetupState.ARMED.value,
                 timestamp=stamp,
                 dedupe_key=f"{watch_key}:sweep",
             )
-            self.state_manager.record_timeline_event(
-                symbol=symbol,
-                event="ifvg",
-                label=f"{watch.get('timeframe', '-')} strict iFVG detected",
-                phase=SetupPhase.IFVG_VALIDATION.value,
-                state=SetupState.ARMED.value,
-                timestamp=stamp,
-                dedupe_key=f"{watch_key}:ifvg",
-            )
+            if opposite:
+                self.state_manager.record_timeline_event(
+                    symbol=symbol,
+                    event="opposite_sweep",
+                    label=f"{watch.get('timeframe', '-')} opposite sweep: {opposite.get('label', '-')}",
+                    phase=SetupPhase.NARRATIVE.value,
+                    state=watch.get("status"),
+                    timestamp=stamp,
+                    dedupe_key=f"{watch_key}:opposite:{opposite.get('label', '-')}",
+                )
+            if narrative.get("mss"):
+                self.state_manager.record_timeline_event(
+                    symbol=symbol,
+                    event="mss",
+                    label=f"{watch.get('timeframe', '-')} MSS confirmed",
+                    phase=SetupPhase.WAITING_MSS.value,
+                    state=watch.get("status"),
+                    timestamp=stamp,
+                    dedupe_key=f"{watch_key}:mss:{narrative['mss'].get('mss_index')}",
+                )
+            if watch.get("ifvg"):
+                self.state_manager.record_timeline_event(
+                    symbol=symbol,
+                    event="ifvg",
+                    label=f"{watch.get('timeframe', '-')} strict iFVG detected",
+                    phase=SetupPhase.IFVG_VALIDATION.value,
+                    state=watch.get("status") or SetupState.ARMED.value,
+                    timestamp=stamp,
+                    dedupe_key=f"{watch_key}:ifvg",
+                )
 
     def _record_rejection_events(self, rejections: list[dict]):
         for rejection in rejections:
@@ -161,13 +186,29 @@ class ScanService:
         phase = payload.get("phase")
         reason = payload.get("reason")
         state = payload.get("state")
-        if state == SetupState.CONFIRMED.value:
+        if state in {SetupState.CONFIRMED.value, SetupState.TRIGGERED.value}:
             self.logger.signal(message, symbol=symbol, timeframe=timeframe, phase=phase, reason=reason)
-        elif state in {SetupState.ARMED.value, SetupState.WAITING_MSS.value, SetupState.CONTEXT_FOUND.value}:
+        elif state in {
+            SetupState.ARMED.value,
+            SetupState.WAITING_MSS.value,
+            SetupState.AWAITING_IFVG.value,
+            SetupState.SWEEP_DETECTED.value,
+            SetupState.AWAITING_LTF_SWEEP.value,
+            SetupState.CONTEXT_FOUND.value,
+            SetupState.HTF_CONTEXT_FOUND.value,
+        }:
             self.logger.watch(message, symbol=symbol, timeframe=timeframe, phase=phase, reason=reason)
         elif state == SetupState.ERROR.value:
             self.logger.error(message, symbol=symbol, timeframe=timeframe, phase=phase, reason=reason)
-        elif state in {SetupState.REJECTED.value, SetupState.COOLDOWN.value}:
+        elif state in {
+            SetupState.REJECTED.value,
+            SetupState.COOLDOWN.value,
+            SetupState.DEGRADED.value,
+            SetupState.INVALIDATED.value,
+            SetupState.TWO_SIDED_LIQUIDITY_TAKEN.value,
+            SetupState.AMBIGUOUS.value,
+            SetupState.EXPIRED.value,
+        }:
             self.logger.warn(message, symbol=symbol, timeframe=timeframe, phase=phase, reason=reason)
         else:
             self.logger.info(message, symbol=symbol, timeframe=timeframe, phase=phase, reason=reason)
@@ -242,7 +283,15 @@ class ScanService:
 
         active_watches = self.state_manager.list_active_watches(
             symbol=symbol,
-            statuses=("armed", "waiting_mss", "confirmed", "cooldown"),
+            statuses=(
+                "armed",
+                "sweep_detected",
+                "waiting_mss",
+                "awaiting_ifvg",
+                "triggered",
+                "confirmed",
+                "cooldown",
+            ),
         )
         decision = self.strategy_engine.evaluate_symbol(snapshot, active_watches)
         self._record_context_event(symbol, decision)
@@ -285,29 +334,30 @@ class ScanService:
 
         for watch in stored_new_watches:
             self.logger.watch(
-                "watch armed after sweep",
+                "narrative watch updated",
                 symbol=watch["symbol"],
                 timeframe=watch["timeframe"],
-                phase=SetupPhase.IFVG_VALIDATION.value,
-                reason=watch.get("status_reason") or "armed after liquidity sweep",
+                phase=self.strategy_engine._phase_for_watch_status(watch.get("status")),
+                reason=watch.get("status_reason") or "narrative updated",
             )
-            alert_result = self.alert_service.handle_watch_armed(watch)
-            if alert_result["status"] == "failed":
-                self.logger.error(
-                    "Watch alert delivery failed",
-                    symbol=watch["symbol"],
-                    timeframe=watch["timeframe"],
-                    phase=SetupPhase.ALERT_SENT.value,
-                    reason=alert_result["message"],
-                )
-            elif alert_result["status"] in {"dedup_blocked", "cooldown_blocked"}:
-                self.logger.warn(
-                    "Watch alert blocked",
-                    symbol=watch["symbol"],
-                    timeframe=watch["timeframe"],
-                    phase=SetupPhase.ALERT_SENT.value,
-                    reason=alert_result["message"],
-                )
+            if watch.get("status") == SetupState.ARMED.value:
+                alert_result = self.alert_service.handle_watch_armed(watch)
+                if alert_result["status"] == "failed":
+                    self.logger.error(
+                        "Watch alert delivery failed",
+                        symbol=watch["symbol"],
+                        timeframe=watch["timeframe"],
+                        phase=SetupPhase.ALERT_SENT.value,
+                        reason=alert_result["message"],
+                    )
+                elif alert_result["status"] in {"dedup_blocked", "cooldown_blocked"}:
+                    self.logger.warn(
+                        "Watch alert blocked",
+                        symbol=watch["symbol"],
+                        timeframe=watch["timeframe"],
+                        phase=SetupPhase.ALERT_SENT.value,
+                        reason=alert_result["message"],
+                    )
 
         state = decision.state
         phase = decision.phase
@@ -348,7 +398,7 @@ class ScanService:
                 event="mss",
                 label=f"{signal['timeframe']} MSS detected",
                 phase=SetupPhase.READY.value,
-                state=SetupState.CONFIRMED.value,
+                state=SetupState.TRIGGERED.value,
                 timestamp=decision.broker_now,
                 dedupe_key=f"{signal['watch_key']}:{signal['mss_index']}",
             )
@@ -362,9 +412,9 @@ class ScanService:
                     reason="confirmed: alert sent and cooldown active",
                     signal_event_key=signal_event_key,
                 )
-                state = SetupState.CONFIRMED.value
+                state = SetupState.TRIGGERED.value
                 phase = SetupPhase.READY.value
-                reason = "confirmed: MSS + strict iFVG"
+                reason = "triggered: narrative ready with MSS + strict iFVG"
                 cooldown_remaining, cooldown_until = self._cooldown_snapshot(signal_event_key)
                 self.state_manager.record_timeline_event(
                     symbol=symbol,
@@ -428,9 +478,9 @@ class ScanService:
                     reason="confirmed signal recorded locally",
                     signal_event_key=signal_event_key,
                 )
-                state = SetupState.CONFIRMED.value
+                state = SetupState.TRIGGERED.value
                 phase = SetupPhase.READY.value
-                reason = "confirmed: MSS + strict iFVG"
+                reason = "triggered: narrative ready with MSS + strict iFVG"
                 self.logger.signal(
                     "confirmed signal recorded locally",
                     symbol=signal["symbol"],
@@ -446,7 +496,7 @@ class ScanService:
                     reason=signal_result["message"],
                     signal_event_key=signal_event_key,
                 )
-                state = SetupState.CONFIRMED.value
+                state = SetupState.TRIGGERED.value
                 phase = SetupPhase.READY.value
                 reason = f"confirmed: Telegram unavailable ({signal_result['message']})"
                 self.logger.warn(
@@ -464,7 +514,7 @@ class ScanService:
                     reason=signal_result["message"],
                     signal_event_key=signal_event_key,
                 )
-                state = SetupState.CONFIRMED.value
+                state = SetupState.TRIGGERED.value
                 phase = SetupPhase.READY.value
                 reason = f"confirmed: delivery failed ({signal_result['message']})"
                 self.logger.error(

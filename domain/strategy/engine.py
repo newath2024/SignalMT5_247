@@ -61,6 +61,33 @@ class StrategyEngine:
     def __init__(self, trigger_timeframes: list[str]):
         self.trigger_timeframes = list(trigger_timeframes)
 
+    @staticmethod
+    def _phase_for_watch_status(status: str | None) -> str:
+        status = str(status or "").lower()
+        if status in {SetupState.ARMED.value, SetupState.TRIGGERED.value}:
+            return SetupPhase.READY.value
+        if status == SetupState.AWAITING_IFVG.value:
+            return SetupPhase.WAITING_IFVG.value
+        if status in {SetupState.SWEEP_DETECTED.value, SetupState.WAITING_MSS.value}:
+            return SetupPhase.WAITING_MSS.value
+        return SetupPhase.NARRATIVE.value
+
+    @staticmethod
+    def _waiting_for_from_watch(watch: dict) -> str:
+        status = str(watch.get("status") or "").lower()
+        if status in {
+            SetupState.DEGRADED.value,
+            SetupState.INVALIDATED.value,
+            SetupState.TWO_SIDED_LIQUIDITY_TAKEN.value,
+            SetupState.AMBIGUOUS.value,
+        }:
+            return "-"
+        if status == SetupState.AWAITING_IFVG.value:
+            return "strict iFVG"
+        if status in {SetupState.ARMED.value, SetupState.TRIGGERED.value}:
+            return "trigger"
+        return "MSS"
+
     def _prepare_retained_watch(self, snapshot: dict, watch_setup: dict) -> tuple[dict | None, dict | None]:
         refreshed_context = refresh_htf_context(snapshot, watch_setup["htf_zone"])
         if watch_has_expired(snapshot, watch_setup):
@@ -74,14 +101,15 @@ class StrategyEngine:
 
         updated = dict(watch_setup)
         updated["context"] = refreshed_context
-        if updated.get("status") not in {"confirmed", "cooldown"}:
-            updated["status"] = SetupState.WAITING_MSS.value
+        if updated.get("status") not in {"confirmed", "cooldown", SetupState.ARMED.value}:
+            updated["status"] = updated.get("narrative_state") or updated.get("status") or SetupState.WAITING_MSS.value
         updated["direction"] = updated.get("direction") or direction_label(updated.get("bias"))
-        updated["waiting_for"] = "MSS"
-        updated["ltf_sweep_status"] = "waiting MSS"
-        updated["zone_top"] = updated.get("zone_top") or float(updated["ifvg"]["high"])
-        updated["zone_bottom"] = updated.get("zone_bottom") or float(updated["ifvg"]["low"])
-        updated["status_reason"] = describe_waiting_mss_reason(updated)
+        updated["waiting_for"] = self._waiting_for_from_watch(updated)
+        updated["ltf_sweep_status"] = updated.get("ltf_sweep_status") or "narrative active"
+        if updated.get("ifvg"):
+            updated["zone_top"] = updated.get("zone_top") or float(updated["ifvg"]["high"])
+            updated["zone_bottom"] = updated.get("zone_bottom") or float(updated["ifvg"]["low"])
+        updated["status_reason"] = updated.get("status_reason") or describe_waiting_mss_reason(updated)
         return updated, None
 
     @staticmethod
@@ -121,19 +149,22 @@ class StrategyEngine:
 
         new_watches, rejections = detect_watch_candidates(snapshot, contexts, self.trigger_timeframes)
 
-        seen_keys = {item["watch_key"] for item in retained_watches}
+        retained_by_key = {item["watch_key"]: item for item in retained_watches}
+        seen_keys = set(retained_by_key)
         unique_new_watches = []
         for watch in new_watches:
-            if watch["watch_key"] in seen_keys:
+            watch["status"] = watch.get("status") or watch.get("narrative_state") or SetupState.WAITING_MSS.value
+            watch["direction"] = watch.get("direction") or direction_label(watch.get("bias"))
+            watch["waiting_for"] = self._waiting_for_from_watch(watch)
+            watch["ltf_sweep_status"] = watch.get("ltf_sweep_status") or "narrative active"
+            watch["status_reason"] = watch.get("status_reason") or describe_watch_reason(watch)
+            if watch["watch_key"] in retained_by_key:
+                retained_by_key[watch["watch_key"]] = watch
                 continue
             seen_keys.add(watch["watch_key"])
-            watch["status"] = SetupState.ARMED.value
-            watch["direction"] = watch.get("direction") or direction_label(watch.get("bias"))
-            watch["waiting_for"] = "MSS"
-            watch["ltf_sweep_status"] = "sweep detected"
-            watch["status_reason"] = describe_watch_reason(watch)
             unique_new_watches.append(watch)
 
+        retained_watches = list(retained_by_key.values())
         active_pool = retained_watches + unique_new_watches
         confirmed_signal, confirm_rejection = detect_confirmed_signal(snapshot, active_pool, all_htf_zones)
         if confirm_rejection:
@@ -181,19 +212,20 @@ class StrategyEngine:
             htf_bias_display = htf_bias
 
         if confirmed_signal is not None:
-            state = SetupState.CONFIRMED.value
+            state = SetupState.TRIGGERED.value
             phase = SetupPhase.READY.value
-            reason = "confirmed: MSS + strict iFVG"
+            reason = "triggered: narrative ready with MSS + strict iFVG"
             timeframe = confirmed_signal["timeframe"]
             waiting_for = "entry"
             active_watch_id = confirmed_signal["watch_key"]
         elif unique_new_watches:
-            state = SetupState.ARMED.value
-            phase = SetupPhase.IFVG_VALIDATION.value
-            reason = describe_watch_reason(unique_new_watches[0])
-            timeframe = unique_new_watches[0]["timeframe"]
-            waiting_for = "MSS"
-            active_watch_id = unique_new_watches[0]["watch_key"]
+            focus = unique_new_watches[0]
+            state = focus.get("status") or SetupState.WAITING_MSS.value
+            phase = self._phase_for_watch_status(state)
+            reason = focus.get("status_reason") or describe_watch_reason(focus)
+            timeframe = focus["timeframe"]
+            waiting_for = self._waiting_for_from_watch(focus)
+            active_watch_id = focus["watch_key"]
         elif retained_watches:
             selected_retained = retained_watches[0]
             if selected_retained.get("status") == SetupState.COOLDOWN.value:
@@ -201,16 +233,16 @@ class StrategyEngine:
                 phase = SetupPhase.ALERT_SENT.value
                 reason = selected_retained.get("status_reason") or "cooldown: prior alert still active"
                 waiting_for = "cooldown"
-            elif selected_retained.get("status") == SetupState.CONFIRMED.value:
-                state = SetupState.CONFIRMED.value
+            elif selected_retained.get("status") in {SetupState.CONFIRMED.value, SetupState.TRIGGERED.value}:
+                state = SetupState.TRIGGERED.value
                 phase = SetupPhase.READY.value
-                reason = selected_retained.get("status_reason") or "confirmed: signal already recorded"
+                reason = selected_retained.get("status_reason") or "triggered: signal already recorded"
                 waiting_for = "operator review"
             else:
-                state = SetupState.WAITING_MSS.value
-                phase = SetupPhase.WAITING_MSS.value
-                reason = describe_waiting_mss_reason(selected_retained)
-                waiting_for = "MSS"
+                state = selected_retained.get("status") or SetupState.WAITING_MSS.value
+                phase = self._phase_for_watch_status(state)
+                reason = selected_retained.get("status_reason") or describe_waiting_mss_reason(selected_retained)
+                waiting_for = self._waiting_for_from_watch(selected_retained)
             timeframe = selected_retained["timeframe"]
             active_watch_id = selected_retained["watch_key"]
         elif selected_rejection is not None:
@@ -221,14 +253,14 @@ class StrategyEngine:
             waiting_for = "-"
             active_watch_id = None
         elif best_directional_context is not None:
-            state = SetupState.CONTEXT_FOUND.value
+            state = SetupState.AWAITING_LTF_SWEEP.value
             phase = SetupPhase.LTF_SWEEP.value
             reason = describe_context_wait(best_directional_context)
             timeframe = best_directional_context.get("zone", {}).get("timeframe", "-")
             waiting_for = "sweep"
             active_watch_id = None
         elif primary_context is not None:
-            state = SetupState.CONTEXT_FOUND.value
+            state = SetupState.HTF_CONTEXT_FOUND.value
             phase = SetupPhase.HTF_CONTEXT.value
             reason = describe_context_wait(primary_context)
             timeframe = primary_context.get("zone", {}).get("timeframe", "-")

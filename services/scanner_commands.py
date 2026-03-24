@@ -255,14 +255,19 @@ class ScannerCommandService:
         results = results or []
         for item in results:
             self.runtime_state.update_symbol_state(item)
-        ready = [item["symbol"] for item in results if item.get("state") == SetupState.CONFIRMED.value]
+        ready = [item["symbol"] for item in results if item.get("state") in {SetupState.CONFIRMED.value, SetupState.TRIGGERED.value}]
         armed = [
             item["symbol"]
             for item in results
-            if item.get("state") in {SetupState.ARMED.value, SetupState.WAITING_MSS.value}
+            if item.get("state") in {
+                SetupState.ARMED.value,
+                SetupState.WAITING_MSS.value,
+                SetupState.SWEEP_DETECTED.value,
+                SetupState.AWAITING_IFVG.value,
+            }
         ]
-        context_only = [item["symbol"] for item in results if item.get("state") == SetupState.CONTEXT_FOUND.value]
-        rejected = [item["symbol"] for item in results if item.get("state") == SetupState.REJECTED.value]
+        context_only = [item["symbol"] for item in results if item.get("state") in {SetupState.CONTEXT_FOUND.value, SetupState.HTF_CONTEXT_FOUND.value, SetupState.AWAITING_LTF_SWEEP.value}]
+        rejected = [item["symbol"] for item in results if item.get("state") in {SetupState.REJECTED.value, SetupState.DEGRADED.value, SetupState.INVALIDATED.value, SetupState.TWO_SIDED_LIQUIDITY_TAKEN.value, SetupState.AMBIGUOUS.value}]
         errors = [item["symbol"] for item in results if item.get("state") == SetupState.ERROR.value]
         actionable_count = len(ready) + len(armed)
         lines = [
@@ -282,11 +287,20 @@ class ScannerCommandService:
         labels = {
             SetupState.IDLE.value: "Standby",
             SetupState.CONTEXT_FOUND.value: "Tracking",
-            SetupState.ARMED.value: "Locked Target",
+            SetupState.HTF_CONTEXT_FOUND.value: "HTF Context Found",
+            SetupState.AWAITING_LTF_SWEEP.value: "Awaiting LTF Sweep",
+            SetupState.ARMED.value: "Armed",
+            SetupState.SWEEP_DETECTED.value: "Sweep Confirmed",
             SetupState.WAITING_MSS.value: "Tracking MSS",
-            SetupState.CONFIRMED.value: "Locked Target",
+            SetupState.AWAITING_IFVG.value: "Awaiting iFVG",
+            SetupState.CONFIRMED.value: "Triggered",
+            SetupState.TRIGGERED.value: "Triggered",
             SetupState.COOLDOWN.value: "Cooldown",
             SetupState.REJECTED.value: "Invalid / No Edge",
+            SetupState.DEGRADED.value: "Degraded",
+            SetupState.INVALIDATED.value: "Invalidated",
+            SetupState.TWO_SIDED_LIQUIDITY_TAKEN.value: "Two-Sided Sweep",
+            SetupState.AMBIGUOUS.value: "Ambiguous",
             SetupState.ERROR.value: "Attention",
         }
         return labels.get(str(state or "").lower(), str(state or "-"))

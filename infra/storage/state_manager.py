@@ -575,6 +575,7 @@ class StateManager:
             marker_map = {
                 "htf_context": "htf_context_detected_at",
                 "sweep": "sweep_detected_at",
+                "opposite_sweep": "opposite_sweep_detected_at",
                 "mss": "mss_detected_at",
                 "ifvg": "ifvg_detected_at",
                 "rejection": "last_rejection_at",

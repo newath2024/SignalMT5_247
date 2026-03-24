@@ -252,10 +252,26 @@ def format_symbol_focus(row: dict | None) -> str:
 
     if state in {"confirmed", "entry_ready"}:
         return "Target locked"
+    if state == "triggered":
+        return "Triggered"
     if state in {"armed", "watch_armed"}:
         return "Execution plan armed"
-    if state in {"waiting_mss", "setup_building"}:
+    if state in {"waiting_mss", "setup_building", "sweep_detected"}:
         return "Awaiting MSS confirmation"
+    if state == "awaiting_ifvg":
+        return "Awaiting strict iFVG"
+    if state == "awaiting_ltf_sweep":
+        return "Awaiting liquidity sweep (LTF)"
+    if state == "htf_context_found":
+        return "HTF context found"
+    if state == "degraded":
+        return "Narrative degraded"
+    if state == "two_sided_liquidity_taken":
+        return "Two-sided liquidity taken"
+    if state == "invalidated":
+        return "Setup invalidated"
+    if state == "ambiguous":
+        return "Narrative ambiguous"
     if state == "context_found":
         return "Awaiting liquidity sweep (LTF)" if "ltf sweep" in reason.lower() else "Awaiting HTF trigger"
     if state == "rejected":
@@ -294,17 +310,19 @@ def sort_symbol_rows(rows: list[dict] | None) -> list[dict]:
 
     def _readiness_rank(item: dict) -> int:
         state = str(item.get("state") or "").lower()
-        if state in {"confirmed", "entry_ready", "alerted"}:
+        if state in {"confirmed", "entry_ready", "alerted", "triggered"}:
             return 0
         if state in {"armed", "watch_armed"}:
             return 1
-        if state in {"waiting_mss", "setup_building"}:
+        if state in {"awaiting_ifvg"}:
             return 2
-        if state == "context_found":
+        if state in {"waiting_mss", "setup_building", "sweep_detected"}:
+            return 2
+        if state in {"context_found", "htf_context_found", "awaiting_ltf_sweep"}:
             return 3
         if state in {"cooldown"}:
             return 4
-        if state in {"rejected", "expired"}:
+        if state in {"degraded", "invalidated", "two_sided_liquidity_taken", "ambiguous", "rejected", "expired"}:
             return 6
         if state == "error":
             return 7
@@ -400,7 +418,9 @@ def format_phase(value: str | None) -> str:
     labels = {
         "HTF_CONTEXT": "HTF Thesis",
         "LTF_SWEEP": "Sweep Tracking",
+        "NARRATIVE": "Narrative",
         "WAITING_MSS": "Tracking MSS",
+        "WAITING_IFVG": "Awaiting iFVG",
         "IFVG_VALIDATION": "iFVG Validation",
         "READY": "Locked Target",
         "ALERT_SENT": "Alert Routed",
