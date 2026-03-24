@@ -9,6 +9,5 @@ Use that document for the current Windows portable deployment flow:
 
 - local bundled MT5 portable terminal
 - relative-path runtime folders
-- run.bat main launcher
+- run.bat main launcher for desktop, headless, and health-check modes
 - restart_bot.bat supervisor loop
-- first_run_check.bat health check

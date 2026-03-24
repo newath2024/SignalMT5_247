@@ -23,7 +23,6 @@ project_root/
   portable.env
   run.bat
   restart_bot.bat
-  first_run_check.bat
   prepare_portable.md
   ... existing bot source files ...
 ```
@@ -38,7 +37,7 @@ project_root/
 2. Launches `mt5_portable\terminal64.exe /portable`
 3. Waits until the MT5 terminal is actually ready
 4. Verifies that a saved MT5 login/session exists
-5. Starts `restart_bot.bat`
+5. Starts `restart_bot.bat` only when the selected run mode is headless
 6. `restart_bot.bat` runs the bot and restarts it if it exits unexpectedly
 
 ## Source-machine preparation
@@ -92,7 +91,7 @@ run.bat
 Or run this once for an isolated check:
 
 ```text
-first_run_check.bat
+run.bat --check
 ```
 
 If the terminal opens but the bot does not start because no session is available:
@@ -134,7 +133,7 @@ Copy the entire project folder, including:
 - `mt5_portable`
 - `.env` if you use Telegram secrets there, but transfer it privately and do not publish it with the bundle
 - `portable.env`
-- `run.bat`, `restart_bot.bat`, `first_run_check.bat`
+- `run.bat`, `restart_bot.bat`
 
 Do not copy only the source code.
 
@@ -179,7 +178,7 @@ OPENCLAW_MT5_INIT_RETRIES=15
 OPENCLAW_MT5_INIT_RETRY_DELAY_SEC=3
 OPENCLAW_MT5_REQUIRE_SAVED_SESSION=true
 OPENCLAW_MT5_TICK_MAX_AGE_SEC=0
-OPENCLAW_BOT_RUN_MODE=headless
+OPENCLAW_BOT_RUN_MODE=desktop
 OPENCLAW_BOT_RESTART_DELAY_SEC=10
 ```
 
@@ -198,7 +197,7 @@ Default is `normal`.
 Run:
 
 ```text
-first_run_check.bat
+run.bat --check
 ```
 
 Or manually:
@@ -217,9 +216,11 @@ This verifies:
 ## Notes for unattended usage
 
 - `restart_bot.bat` restarts the bot process if it exits with a non-zero exit code
-- headless mode is the best default for Windows VPS
-- if you want the UI instead, set:
-  `OPENCLAW_BOT_RUN_MODE=desktop`
+- headless mode is still useful for Windows VPS
+- to force UI mode, run:
+  `run.bat --desktop`
+- to force headless mode, run:
+  `run.bat --headless`
 - if you want Windows auto-start, create a Task Scheduler task that runs `run.bat` at logon
 
 ## Limitations

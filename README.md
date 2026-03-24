@@ -79,6 +79,24 @@ Run the portable Windows bundle:
 run.bat
 ```
 
+Run the portable bundle explicitly in desktop mode:
+
+```text
+run.bat --desktop
+```
+
+Run the portable bundle in headless mode:
+
+```text
+run.bat --headless
+```
+
+Run the portable health check:
+
+```text
+run.bat --check
+```
+
 Open the app without auto-starting the scanner:
 
 ```bash
