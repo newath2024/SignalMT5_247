@@ -546,7 +546,7 @@ class BadgeDelegate(QStyledItemDelegate):
         path = QPainterPath()
         path.addRoundedRect(QRectF(rect), RADIUS_SM, RADIUS_SM)
         painter.fillPath(path, css_color(palette.background))
-        painter.setPen(QPen(css_color(rgba(palette.border, 0.88)), 1))
+        painter.setPen(QPen(css_color(palette.border), 1))
         painter.drawPath(path)
         painter.setPen(css_color(palette.foreground))
         painter.drawText(rect, Qt.AlignCenter, text)
