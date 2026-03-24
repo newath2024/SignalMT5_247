@@ -88,8 +88,10 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.auto_start = auto_start
         self._symbol_rows: list[dict] = []
         self._last_snapshot: dict | None = None
+        self._last_render_fingerprint: dict[str, object] = {}
         self._pulse_on = False
         self._active_symbol: str | None = None
+        self._pending_snapshot_refresh = False
 
         self.setWindowTitle(f"{controller.config.app.name} v{controller.config.app.version}")
         self.resize(1600, 980)
@@ -141,6 +143,9 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.watch_table = ModernTableWidget(9, compact=True)
         self.alert_table = ModernTableWidget(9, compact=True)
         self.log_view = TelemetryLogView()
+        self.symbol_table.set_empty_state("No markets in scope", "The radar will populate once symbols are configured for scanning.")
+        self.watch_table.set_empty_state("No active pipeline targets", "Armed and developing setups will appear here during runtime.")
+        self.alert_table.set_empty_state("No alerts yet", "Fresh execution alerts and blocked states will appear here during runtime.")
 
         self.metric_cards = {
             "active_watches": StatCard("Active Setups"),
@@ -207,14 +212,18 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.inspector.clear()
 
         self._snapshot_timer = QTimer(self)
-        self._snapshot_timer.timeout.connect(self.refresh_snapshot)
+        self._snapshot_timer.timeout.connect(self.schedule_snapshot_refresh)
         self._snapshot_timer.start(1500)
+
+        self._snapshot_refresh_timer = QTimer(self)
+        self._snapshot_refresh_timer.setSingleShot(True)
+        self._snapshot_refresh_timer.timeout.connect(self._perform_snapshot_refresh)
 
         self._heartbeat_timer = QTimer(self)
         self._heartbeat_timer.timeout.connect(self._tick_status_feedback)
         self._heartbeat_timer.start(1000)
 
-        self.refresh_snapshot()
+        self.schedule_snapshot_refresh(immediate=True)
         if self.auto_start:
             QTimer.singleShot(200, self.start_scanner)
 
@@ -407,13 +416,13 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
 
     def start_scanner(self) -> None:
         ok, message = self.controller.start(interval_sec=self.interval_spin.value())
-        self.refresh_snapshot()
+        self.schedule_snapshot_refresh(immediate=True)
         if not ok:
             QMessageBox.information(self, APP_NAME, message)
 
     def stop_scanner(self) -> None:
         self.controller.stop()
-        self.refresh_snapshot()
+        self.schedule_snapshot_refresh(immediate=True)
 
     def rescan_now(self) -> None:
         self._run_background(self.controller.rescan_now)
@@ -427,7 +436,7 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
 
     def clear_activity_log(self) -> None:
         self.controller.clear_activity_log()
-        self.refresh_snapshot()
+        self.schedule_snapshot_refresh(immediate=True)
 
     def export_logs(self) -> None:
         default_path = Path(self.controller.logger.log_file).with_name("liquidity_sniper_export.log")
@@ -448,14 +457,30 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         ok, message = self.controller.set_ob_fvg_mode(mode)
         if not ok:
             QMessageBox.information(self, APP_NAME, message)
-        self.refresh_snapshot()
+        self.schedule_snapshot_refresh(immediate=True)
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
         self.controller.shutdown()
         super().closeEvent(event)
 
     def refresh_snapshot(self) -> None:
+        self.schedule_snapshot_refresh(immediate=True)
+
+    def schedule_snapshot_refresh(self, immediate: bool = False) -> None:
+        if immediate:
+            self._pending_snapshot_refresh = False
+            self._snapshot_refresh_timer.stop()
+            self._perform_snapshot_refresh()
+            return
+        if self._pending_snapshot_refresh:
+            return
+        self._pending_snapshot_refresh = True
+        self._snapshot_refresh_timer.start(120)
+
+    def _perform_snapshot_refresh(self) -> None:
+        self._pending_snapshot_refresh = False
         snapshot = self.controller.snapshot()
+        previous_snapshot = self._last_snapshot
         self._last_snapshot = snapshot
 
         scanner = snapshot["scanner"]
@@ -504,7 +529,8 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self._fill_watch_table(snapshot["watches"])
         self._fill_alert_table(snapshot["alerts"])
         self.refresh_activity_log()
-        self.update_symbol_inspector()
+        if self._selected_payload_changed(previous_snapshot, snapshot):
+            self.update_symbol_inspector()
         self._render_status_feedback()
         self._sync_scanner_action_buttons(scanner)
 
@@ -628,11 +654,12 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self._symbol_rows = display_rows
         self.symbol_count_label.setText(f"Tracking {len(display_rows)}/{total_rows} markets")
 
+        vertical_scroll = self.symbol_table.verticalScrollBar().value()
+        horizontal_scroll = self.symbol_table.horizontalScrollBar().value()
         signal_state = self.symbol_table.blockSignals(True)
         self.symbol_table.setUpdatesEnabled(False)
         try:
-            self.symbol_table.clearSelection()
-            self.symbol_table.setRowCount(len(display_rows))
+            self._prepare_table_rows(self.symbol_table, len(display_rows))
             top_symbols = {item.get("symbol") for item in display_rows[:3]}
             for row_index, item in enumerate(display_rows):
                 state = item.get("state", "idle")
@@ -647,16 +674,22 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
                     priority,
                     format_relative_age(item.get("last_update")),
                 ]
+                row_payloads = []
                 for column_index, value in enumerate(values):
-                    cell = QTableWidgetItem(str(value))
-                    cell.setData(Qt.UserRole, item)
-                    if column_index in {1, 4, 5, 6, 7}:
-                        cell.setTextAlignment(Qt.AlignCenter)
+                    badge_payload = None
                     if column_index == 1:
-                        cell.setData(BADGE_ROLE, {"text": str(value), "tone": state_tone(state)})
+                        badge_payload = {"text": str(value), "tone": state_tone(state)}
                     elif column_index == 6:
-                        cell.setData(BADGE_ROLE, {"text": str(value), "tone": priority_tone(priority)})
-                    self.symbol_table.setItem(row_index, column_index, cell)
+                        badge_payload = {"text": str(value), "tone": priority_tone(priority)}
+                    row_payloads.append(
+                        {
+                            "text": str(value),
+                            "alignment": Qt.AlignCenter if column_index in {1, 4, 5, 6, 7} else None,
+                            "user_role": item,
+                            "badge": badge_payload,
+                        }
+                    )
+                self._sync_table_row(self.symbol_table, row_index, row_payloads)
 
                 self._paint_row(self.symbol_table, row_index, state)
                 self._emphasize_row(
@@ -670,14 +703,17 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         finally:
             self.symbol_table.setUpdatesEnabled(True)
             self.symbol_table.blockSignals(signal_state)
+            self.symbol_table.verticalScrollBar().setValue(vertical_scroll)
+            self.symbol_table.horizontalScrollBar().setValue(horizontal_scroll)
 
         self._restore_symbol_selection(display_rows, selected_symbol)
 
     def _fill_watch_table(self, rows: list[dict]) -> None:
+        vertical_scroll = self.watch_table.verticalScrollBar().value()
         signal_state = self.watch_table.blockSignals(True)
         self.watch_table.setUpdatesEnabled(False)
         try:
-            self.watch_table.setRowCount(len(rows))
+            self._prepare_table_rows(self.watch_table, len(rows))
             for row_index, item in enumerate(rows):
                 direction = (
                     item.get("direction")
@@ -694,25 +730,33 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
                     format_zone(item.get("zone_top"), item.get("zone_bottom")),
                     format_short_time(item.get("armed_at")),
                 ]
+                row_payloads = []
                 for column_index, value in enumerate(values):
-                    cell = QTableWidgetItem(str(value))
-                    if column_index in {1, 2, 5, 8}:
-                        cell.setTextAlignment(Qt.AlignCenter)
+                    badge_payload = None
                     if column_index == 2:
-                        cell.setData(BADGE_ROLE, {"text": str(value), "tone": self._direction_tone(direction)})
+                        badge_payload = {"text": str(value), "tone": self._direction_tone(direction)}
                     elif column_index == 5:
-                        cell.setData(BADGE_ROLE, {"text": str(value), "tone": state_tone(item.get("status"))})
-                    self.watch_table.setItem(row_index, column_index, cell)
+                        badge_payload = {"text": str(value), "tone": state_tone(item.get("status"))}
+                    row_payloads.append(
+                        {
+                            "text": str(value),
+                            "alignment": Qt.AlignCenter if column_index in {1, 2, 5, 8} else None,
+                            "badge": badge_payload,
+                        }
+                    )
+                self._sync_table_row(self.watch_table, row_index, row_payloads)
                 self._paint_row(self.watch_table, row_index, item.get("status", "idle"))
         finally:
             self.watch_table.setUpdatesEnabled(True)
             self.watch_table.blockSignals(signal_state)
+            self.watch_table.verticalScrollBar().setValue(vertical_scroll)
 
     def _fill_alert_table(self, rows: list[dict]) -> None:
+        vertical_scroll = self.alert_table.verticalScrollBar().value()
         signal_state = self.alert_table.blockSignals(True)
         self.alert_table.setUpdatesEnabled(False)
         try:
-            self.alert_table.setRowCount(len(rows))
+            self._prepare_table_rows(self.alert_table, len(rows))
             for row_index, item in enumerate(rows):
                 values = [
                     format_timestamp(item.get("time")),
@@ -725,13 +769,15 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
                     format_price(item.get("sl")),
                     item.get("status", "-"),
                 ]
+                row_payloads = []
                 for column_index, value in enumerate(values):
-                    cell = QTableWidgetItem(str(value))
+                    badge_payload = None
                     if column_index == 3:
-                        cell.setData(BADGE_ROLE, {"text": str(value), "tone": self._direction_tone(str(value))})
+                        badge_payload = {"text": str(value), "tone": self._direction_tone(str(value))}
                     elif column_index == 8:
-                        cell.setData(BADGE_ROLE, {"text": str(value), "tone": self._alert_status_tone(item)})
-                    self.alert_table.setItem(row_index, column_index, cell)
+                        badge_payload = {"text": str(value), "tone": self._alert_status_tone(item)}
+                    row_payloads.append({"text": str(value), "badge": badge_payload})
+                self._sync_table_row(self.alert_table, row_index, row_payloads)
                 alert_state = (
                     "confirmed"
                     if item.get("status") == "sent"
@@ -741,10 +787,14 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         finally:
             self.alert_table.setUpdatesEnabled(True)
             self.alert_table.blockSignals(signal_state)
+            self.alert_table.verticalScrollBar().setValue(vertical_scroll)
 
     def refresh_activity_log(self) -> None:
         if not self._last_snapshot:
             return
+        scrollbar = self.log_view.verticalScrollBar()
+        previous_value = scrollbar.value()
+        pinned_to_bottom = previous_value >= max(0, scrollbar.maximum() - 4)
         filter_key = self.log_filter.currentData()
         query = self.log_symbol_filter.text().strip().lower()
         lines = []
@@ -764,7 +814,15 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
                 f"{timestamp} [{entry['level']}] {entry['symbol']} {entry['timeframe']} {entry['message']} | "
                 f"phase={entry['phase']}{suffix}"
             )
-        self.log_view.setPlainText("\n".join(lines[-150:]))
+        rendered = "\n".join(lines[-150:])
+        if rendered == self._last_render_fingerprint.get("log_text"):
+            return
+        self._last_render_fingerprint["log_text"] = rendered
+        self.log_view.setPlainText(rendered)
+        if pinned_to_bottom:
+            scrollbar.setValue(scrollbar.maximum())
+        else:
+            scrollbar.setValue(min(previous_value, scrollbar.maximum()))
 
     def _handle_target_selection_changed(self) -> None:
         row = self.symbol_table.currentRow()
@@ -848,6 +906,35 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             return
         self._fill_symbol_table(self._last_snapshot.get("symbols") or [])
         self.update_symbol_inspector()
+
+    @staticmethod
+    def _prepare_table_rows(table: ModernTableWidget, row_count: int) -> None:
+        if table.rowCount() != row_count:
+            table.setRowCount(row_count)
+
+    @staticmethod
+    def _sync_table_row(table: ModernTableWidget, row_index: int, payloads: list[dict]) -> None:
+        for column_index, payload in enumerate(payloads):
+            current_item = table.item(row_index, column_index)
+            if current_item is None:
+                current_item = QTableWidgetItem()
+                table.setItem(row_index, column_index, current_item)
+            text = str(payload.get("text", ""))
+            if current_item.text() != text:
+                current_item.setText(text)
+            alignment = payload.get("alignment")
+            if alignment is not None and current_item.textAlignment() != alignment:
+                current_item.setTextAlignment(alignment)
+            user_role = payload.get("user_role")
+            if user_role is not None:
+                current_item.setData(Qt.UserRole, user_role)
+            badge_payload = payload.get("badge")
+            current_badge = current_item.data(BADGE_ROLE)
+            if badge_payload:
+                if current_badge != badge_payload:
+                    current_item.setData(BADGE_ROLE, badge_payload)
+            elif current_badge is not None:
+                current_item.setData(BADGE_ROLE, None)
 
     def _paint_row(self, table: ModernTableWidget, row_index: int, state: str, tint_only: bool = False) -> None:
         palette = row_palette_for_state(state)
@@ -976,6 +1063,14 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         if key == "cooldown_info":
             return "neutral"
         return None
+
+    def _selected_payload_changed(self, previous_snapshot: dict | None, current_snapshot: dict) -> bool:
+        symbol = self._selected_symbol()
+        if not symbol:
+            return True
+        previous_rows = {str(item.get("symbol")): item for item in (previous_snapshot or {}).get("symbols", [])}
+        current_rows = {str(item.get("symbol")): item for item in current_snapshot.get("symbols", [])}
+        return previous_rows.get(symbol) != current_rows.get(symbol)
 
 
 def launch_desktop(controller, auto_start: bool = True):

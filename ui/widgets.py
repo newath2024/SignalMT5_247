@@ -28,8 +28,11 @@ from .theme import (
     ACCENT_GREEN,
     ACCENT_RED,
     BACKGROUND_CARD_ALT,
+    BORDER_SUBTLE,
     BORDER_STRONG,
     MONO_FONT_FAMILY,
+    RADIUS_MD,
+    RADIUS_SM,
     SPACE_1,
     SPACE_2,
     SPACE_3,
@@ -65,7 +68,7 @@ def _draw_brand_mark(painter: QPainter, rect: QRectF) -> None:
     shell = QPainterPath()
     shell.addRoundedRect(canvas, size * 0.18, size * 0.18)
     painter.fillPath(shell, css_color(BACKGROUND_CARD_ALT))
-    painter.setPen(QPen(css_color(rgba(BORDER_STRONG, 0.75)), max(1.0, size * 0.02)))
+    painter.setPen(QPen(css_color(rgba(BORDER_STRONG, 0.48)), max(1.0, size * 0.018)))
     painter.drawPath(shell)
 
     center = canvas.center()
@@ -179,7 +182,7 @@ class LiveIndicator(QFrame):
         self.setStyleSheet(
             "QFrame {"
             f"background: {color};"
-            "border: 1px solid rgba(255, 255, 255, 0.10);"
+            "border: 1px solid rgba(255, 255, 255, 0.06);"
             f"border-radius: {radius}px;"
             "}"
         )
@@ -202,12 +205,12 @@ class StatusBadge(QLabel):
         super().__init__(text, parent)
         self.setAlignment(Qt.AlignCenter)
         self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
-        self.setMinimumHeight(28)
+        self.setMinimumHeight(24)
         self.set_badge(text or "--")
 
     def set_badge(self, text: str, tone: str = "neutral") -> None:
         self.setText(text)
-        self.setStyleSheet(badge_stylesheet(badge_palette(tone), padding="5px 10px", radius=999))
+        self.setStyleSheet(badge_stylesheet(badge_palette(tone), padding="4px 9px", radius=999, font_size=10))
 
 
 class ConnectionBadge(StatusBadge):
@@ -381,7 +384,7 @@ class InspectorField(QWidget):
         self.value_label.setText(value or "--")
         if tone:
             self.value_label.setStyleSheet(
-                badge_stylesheet(badge_palette(tone), padding="4px 8px", radius=10, font_size=11)
+                badge_stylesheet(badge_palette(tone), padding="3px 7px", radius=RADIUS_SM, font_size=10)
             )
             self.value_label.setProperty("uiClass", "")
         else:
@@ -541,9 +544,9 @@ class BadgeDelegate(QStyledItemDelegate):
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing, True)
         path = QPainterPath()
-        path.addRoundedRect(QRectF(rect), 10, 10)
+        path.addRoundedRect(QRectF(rect), RADIUS_SM, RADIUS_SM)
         painter.fillPath(path, css_color(palette.background))
-        painter.setPen(QPen(css_color(palette.border), 1))
+        painter.setPen(QPen(css_color(rgba(palette.border, 0.88)), 1))
         painter.drawPath(path)
         painter.setPen(css_color(palette.foreground))
         painter.drawText(rect, Qt.AlignCenter, text)
@@ -551,12 +554,32 @@ class BadgeDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option: QStyleOptionViewItem, index) -> QSize:
         hint = super().sizeHint(option, index)
-        return QSize(max(hint.width(), 88), max(hint.height(), 32))
+        return QSize(max(hint.width(), 82), max(hint.height(), 30))
 
 
 class ModernTableWidget(QTableWidget):
     def __init__(self, columns: int, parent: QWidget | None = None, *, compact: bool = False):
         super().__init__(0, columns, parent)
+        self._empty_title = ""
+        self._empty_hint = ""
+        self._empty_overlay = QWidget(self.viewport())
+        self._empty_overlay.setObjectName("TableEmptyOverlay")
+        self._empty_overlay.hide()
+        overlay_layout = QVBoxLayout(self._empty_overlay)
+        overlay_layout.setContentsMargins(SPACE_4, SPACE_4, SPACE_4, SPACE_4)
+        overlay_layout.setSpacing(SPACE_2)
+        overlay_layout.addStretch(1)
+        self._empty_title_label = QLabel("")
+        self._empty_title_label.setAlignment(Qt.AlignCenter)
+        self._empty_title_label.setProperty("uiClass", "sectionTitle")
+        self._empty_hint_label = QLabel("")
+        self._empty_hint_label.setAlignment(Qt.AlignCenter)
+        self._empty_hint_label.setWordWrap(True)
+        self._empty_hint_label.setProperty("uiClass", "sectionHint")
+        overlay_layout.addWidget(self._empty_title_label)
+        overlay_layout.addWidget(self._empty_hint_label)
+        overlay_layout.addStretch(1)
+
         self.setObjectName("CompactTable" if compact else "MarketTable")
         self.setFrameShape(QFrame.NoFrame)
         self.setShowGrid(False)
@@ -578,6 +601,27 @@ class ModernTableWidget(QTableWidget):
     def set_badge_columns(self, *columns: int) -> None:
         for column in columns:
             self.setItemDelegateForColumn(column, BadgeDelegate(self))
+
+    def set_empty_state(self, title: str, hint: str) -> None:
+        self._empty_title = title
+        self._empty_hint = hint
+        self._empty_title_label.setText(title)
+        self._empty_hint_label.setText(hint)
+        self._sync_empty_state()
+
+    def setRowCount(self, rows: int) -> None:  # noqa: N802 - Qt API
+        super().setRowCount(rows)
+        self._sync_empty_state()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        super().resizeEvent(event)
+        self._sync_empty_state()
+
+    def _sync_empty_state(self) -> None:
+        rect = self.viewport().rect().adjusted(18, 18, -18, -18)
+        self._empty_overlay.setGeometry(rect)
+        has_empty_state = bool(self._empty_title) and self.rowCount() == 0
+        self._empty_overlay.setVisible(has_empty_state)
 
 
 class TelemetryLogView(QPlainTextEdit):

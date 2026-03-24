@@ -9,22 +9,22 @@ FONT_FAMILY = "Segoe UI"
 FONT_SIZE = 10
 MONO_FONT_FAMILY = "Consolas"
 
-BACKGROUND_PRIMARY = "#06101c"
-BACKGROUND_ELEVATED = "#0c1728"
-BACKGROUND_CARD = "#0d1829"
-BACKGROUND_CARD_ALT = "#132239"
-BACKGROUND_TABLE = "#0a1423"
-BACKGROUND_INPUT = "#091321"
-BACKGROUND_OVERLAY = "#10203a"
+BACKGROUND_PRIMARY = "#07111d"
+BACKGROUND_ELEVATED = "#0b1626"
+BACKGROUND_CARD = "#0e1a2b"
+BACKGROUND_CARD_ALT = "#122035"
+BACKGROUND_TABLE = "#0a1524"
+BACKGROUND_INPUT = "#0b1523"
+BACKGROUND_OVERLAY = "#11233a"
 
-BORDER_SUBTLE = "#1e3048"
-BORDER_STRONG = "#315170"
-DIVIDER = "#1a2a40"
+BORDER_SUBTLE = "#223249"
+BORDER_STRONG = "#35516d"
+DIVIDER = "#182638"
 
 TEXT_PRIMARY = "#e5edf7"
-TEXT_SECONDARY = "#9cb0c8"
-TEXT_TERTIARY = "#71849d"
-TEXT_DIM = "#5a6b82"
+TEXT_SECONDARY = "#a3b6cb"
+TEXT_TERTIARY = "#76879c"
+TEXT_DIM = "#617289"
 
 ACCENT_BLUE = "#36b8ff"
 ACCENT_CYAN = "#22d3ee"
@@ -86,12 +86,12 @@ def css_color(value: str) -> QColor:
 
 
 BADGE_TONES: dict[str, BadgePalette] = {
-    "neutral": BadgePalette(rgba(ACCENT_SLATE, 0.12), TEXT_SECONDARY, rgba(ACCENT_SLATE, 0.26), ACCENT_SLATE),
-    "info": BadgePalette(rgba(ACCENT_BLUE, 0.16), "#c8efff", rgba(ACCENT_BLUE, 0.30), ACCENT_BLUE),
-    "success": BadgePalette(rgba(ACCENT_GREEN, 0.16), "#d9fce8", rgba(ACCENT_GREEN, 0.32), ACCENT_GREEN),
-    "warning": BadgePalette(rgba(ACCENT_AMBER, 0.18), "#ffe8b2", rgba(ACCENT_AMBER, 0.34), ACCENT_AMBER),
-    "danger": BadgePalette(rgba(ACCENT_RED, 0.15), "#ffd3d8", rgba(ACCENT_RED, 0.30), ACCENT_RED),
-    "muted": BadgePalette(rgba(ACCENT_SLATE, 0.08), TEXT_TERTIARY, rgba(ACCENT_SLATE, 0.16), TEXT_TERTIARY),
+    "neutral": BadgePalette(rgba(ACCENT_SLATE, 0.10), TEXT_SECONDARY, rgba(ACCENT_SLATE, 0.18), ACCENT_SLATE),
+    "info": BadgePalette(rgba(ACCENT_BLUE, 0.12), "#d2f2ff", rgba(ACCENT_BLUE, 0.22), ACCENT_BLUE),
+    "success": BadgePalette(rgba(ACCENT_GREEN, 0.12), "#defcea", rgba(ACCENT_GREEN, 0.24), ACCENT_GREEN),
+    "warning": BadgePalette(rgba(ACCENT_AMBER, 0.13), "#ffe9bf", rgba(ACCENT_AMBER, 0.24), ACCENT_AMBER),
+    "danger": BadgePalette(rgba(ACCENT_RED, 0.11), "#ffd8dc", rgba(ACCENT_RED, 0.22), ACCENT_RED),
+    "muted": BadgePalette(rgba(ACCENT_SLATE, 0.06), TEXT_TERTIARY, rgba(ACCENT_SLATE, 0.12), TEXT_TERTIARY),
 }
 
 
@@ -218,16 +218,16 @@ def connection_tone(active: bool, kind: str = "default") -> str:
 def row_palette_for_state(state: str | None) -> dict[str, QColor]:
     key = str(state or "").lower()
     if key in {"armed", "watch_armed", "entry_ready", "confirmed", "alerted"}:
-        return {"background": qcolor(ACCENT_GREEN, 0.15), "foreground": qcolor(TEXT_PRIMARY)}
+        return {"background": qcolor(ACCENT_GREEN, 0.10), "foreground": qcolor(TEXT_PRIMARY)}
     if key in {"context_found", "setup_building", "waiting_mss"}:
-        return {"background": qcolor(ACCENT_AMBER, 0.10), "foreground": qcolor(TEXT_PRIMARY)}
+        return {"background": qcolor(ACCENT_AMBER, 0.08), "foreground": qcolor(TEXT_PRIMARY)}
     if key in {"rejected", "expired"}:
-        return {"background": qcolor(ACCENT_RED, 0.04), "foreground": qcolor(TEXT_SECONDARY)}
+        return {"background": qcolor(ACCENT_RED, 0.03), "foreground": qcolor(TEXT_SECONDARY)}
     if key == "error":
-        return {"background": qcolor(ACCENT_RED, 0.12), "foreground": qcolor("#ffd5db")}
+        return {"background": qcolor(ACCENT_RED, 0.09), "foreground": qcolor("#ffd5db")}
     if key == "cooldown":
-        return {"background": qcolor(ACCENT_SLATE, 0.08), "foreground": qcolor(TEXT_SECONDARY)}
-    return {"background": qcolor(ACCENT_SLATE, 0.06), "foreground": qcolor(TEXT_PRIMARY)}
+        return {"background": qcolor(ACCENT_SLATE, 0.05), "foreground": qcolor(TEXT_SECONDARY)}
+    return {"background": qcolor(ACCENT_SLATE, 0.04), "foreground": qcolor(TEXT_PRIMARY)}
 
 
 def badge_stylesheet(
@@ -267,7 +267,7 @@ def build_stylesheet() -> str:
     QToolTip {{
         background: {BACKGROUND_OVERLAY};
         color: {TEXT_PRIMARY};
-        border: 1px solid {BORDER_STRONG};
+        border: 1px solid {rgba(BORDER_STRONG, 0.55)};
         padding: 6px 8px;
     }}
     QFrame#PanelCard,
@@ -275,17 +275,17 @@ def build_stylesheet() -> str:
     QFrame#SectionCard,
     QFrame#CommandBar {{
         background: {BACKGROUND_CARD};
-        border: 1px solid {BORDER_SUBTLE};
+        border: 1px solid {rgba(BORDER_SUBTLE, 0.72)};
         border-radius: {RADIUS_LG}px;
     }}
     QFrame#InspectorPanel {{
         background: {BACKGROUND_ELEVATED};
-        border: 1px solid {rgba(BORDER_SUBTLE, 0.88)};
+        border: 1px solid {rgba(BORDER_SUBTLE, 0.66)};
         border-radius: {RADIUS_LG}px;
     }}
     QFrame#InspectorPlaceholder {{
-        background: {rgba(ACCENT_SLATE, 0.06)};
-        border: 1px dashed {rgba(BORDER_STRONG, 0.50)};
+        background: {rgba(ACCENT_SLATE, 0.04)};
+        border: 1px dashed {rgba(BORDER_STRONG, 0.24)};
         border-radius: {RADIUS_MD}px;
     }}
     QWidget[uiClass="surface"] {{
@@ -305,7 +305,7 @@ def build_stylesheet() -> str:
     }}
     QLabel[uiClass="heroTitle"] {{
         color: {TEXT_PRIMARY};
-        font-size: 25px;
+        font-size: 24px;
         font-weight: 700;
     }}
     QLabel[uiClass="inspectorTitle"] {{
@@ -315,7 +315,7 @@ def build_stylesheet() -> str:
     }}
     QLabel[uiClass="subtitle"] {{
         color: {TEXT_SECONDARY};
-        font-size: 12px;
+        font-size: 11px;
     }}
     QLabel[uiClass="meta"] {{
         color: {TEXT_SECONDARY};
@@ -342,7 +342,7 @@ def build_stylesheet() -> str:
     }}
     QLabel[uiClass="kpiValue"] {{
         color: {TEXT_PRIMARY};
-        font-size: 30px;
+        font-size: 28px;
         font-weight: 700;
     }}
     QLabel[uiClass="kpiNote"] {{
@@ -380,15 +380,15 @@ def build_stylesheet() -> str:
     QPushButton {{
         background: {BACKGROUND_INPUT};
         color: {TEXT_PRIMARY};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: {RADIUS_MD}px;
-        padding: 8px 14px;
+        border: 1px solid {rgba(BORDER_SUBTLE, 0.62)};
+        border-radius: {RADIUS_SM}px;
+        padding: 7px 12px;
         min-height: 18px;
         font-weight: 600;
     }}
     QPushButton:hover {{
         background: {BACKGROUND_CARD_ALT};
-        border-color: {BORDER_STRONG};
+        border-color: {rgba(BORDER_STRONG, 0.72)};
     }}
     QPushButton:pressed {{
         background: {BACKGROUND_OVERLAY};
@@ -399,43 +399,43 @@ def build_stylesheet() -> str:
         border-color: {DIVIDER};
     }}
     QPushButton[variant="primary"] {{
-        background: {rgba(ACCENT_BLUE, 0.16)};
+        background: {rgba(ACCENT_BLUE, 0.13)};
         color: #c8efff;
-        border-color: {rgba(ACCENT_BLUE, 0.34)};
+        border-color: {rgba(ACCENT_BLUE, 0.26)};
     }}
     QPushButton[variant="primary"]:hover {{
-        background: {rgba(ACCENT_BLUE, 0.24)};
-        border-color: {rgba(ACCENT_BLUE, 0.48)};
+        background: {rgba(ACCENT_BLUE, 0.18)};
+        border-color: {rgba(ACCENT_BLUE, 0.34)};
     }}
     QPushButton[variant="primary"]:pressed {{
-        background: {rgba(ACCENT_BLUE, 0.32)};
-        border-color: {rgba(ACCENT_BLUE, 0.56)};
+        background: {rgba(ACCENT_BLUE, 0.24)};
+        border-color: {rgba(ACCENT_BLUE, 0.40)};
     }}
     QPushButton[variant="success"] {{
-        background: {rgba(ACCENT_GREEN, 0.22)};
+        background: {rgba(ACCENT_GREEN, 0.15)};
         color: #ddfceb;
-        border-color: {rgba(ACCENT_GREEN, 0.40)};
+        border-color: {rgba(ACCENT_GREEN, 0.28)};
     }}
     QPushButton[variant="success"]:hover {{
-        background: {rgba(ACCENT_GREEN, 0.30)};
-        border-color: {rgba(ACCENT_GREEN, 0.52)};
+        background: {rgba(ACCENT_GREEN, 0.20)};
+        border-color: {rgba(ACCENT_GREEN, 0.36)};
     }}
     QPushButton[variant="success"]:pressed {{
-        background: {rgba(ACCENT_GREEN, 0.38)};
-        border-color: {rgba(ACCENT_GREEN, 0.60)};
+        background: {rgba(ACCENT_GREEN, 0.25)};
+        border-color: {rgba(ACCENT_GREEN, 0.42)};
     }}
     QPushButton[variant="danger"] {{
-        background: {rgba(ACCENT_RED, 0.18)};
+        background: {rgba(ACCENT_RED, 0.13)};
         color: #ffd5db;
-        border-color: {rgba(ACCENT_RED, 0.34)};
+        border-color: {rgba(ACCENT_RED, 0.24)};
     }}
     QPushButton[variant="danger"]:hover {{
-        background: {rgba(ACCENT_RED, 0.28)};
-        border-color: {rgba(ACCENT_RED, 0.48)};
+        background: {rgba(ACCENT_RED, 0.18)};
+        border-color: {rgba(ACCENT_RED, 0.34)};
     }}
     QPushButton[variant="danger"]:pressed {{
-        background: {rgba(ACCENT_RED, 0.36)};
-        border-color: {rgba(ACCENT_RED, 0.58)};
+        background: {rgba(ACCENT_RED, 0.24)};
+        border-color: {rgba(ACCENT_RED, 0.40)};
     }}
     QPushButton[variant="success"]:disabled,
     QPushButton[variant="danger"]:disabled,
@@ -449,15 +449,15 @@ def build_stylesheet() -> str:
     QSpinBox {{
         background: {BACKGROUND_INPUT};
         color: {TEXT_PRIMARY};
-        border: 1px solid {BORDER_SUBTLE};
-        border-radius: {RADIUS_MD}px;
-        padding: 7px 10px;
-        selection-background-color: {rgba(ACCENT_BLUE, 0.28)};
+        border: 1px solid {rgba(BORDER_SUBTLE, 0.60)};
+        border-radius: {RADIUS_SM}px;
+        padding: 6px 10px;
+        selection-background-color: {rgba(ACCENT_BLUE, 0.22)};
     }}
     QLineEdit:focus,
     QComboBox:focus,
     QSpinBox:focus {{
-        border-color: {ACCENT_BLUE};
+        border-color: {rgba(ACCENT_BLUE, 0.64)};
     }}
     QComboBox::drop-down {{
         border: none;
@@ -477,7 +477,7 @@ def build_stylesheet() -> str:
         width: 14px;
         height: 14px;
         border-radius: 4px;
-        border: 1px solid {BORDER_STRONG};
+        border: 1px solid {rgba(BORDER_STRONG, 0.72)};
         background: {BACKGROUND_INPUT};
     }}
     QCheckBox::indicator:checked {{
@@ -493,7 +493,7 @@ def build_stylesheet() -> str:
     QTabBar::tab {{
         background: transparent;
         color: {TEXT_TERTIARY};
-        padding: 10px 14px;
+        padding: 9px 14px;
         margin-right: 6px;
         border: 1px solid transparent;
         border-top-left-radius: {RADIUS_MD}px;
@@ -501,53 +501,53 @@ def build_stylesheet() -> str:
         font-weight: 600;
     }}
     QTabBar::tab:selected {{
-        background: {BACKGROUND_CARD_ALT};
+        background: {rgba(ACCENT_SLATE, 0.07)};
         color: {TEXT_PRIMARY};
-        border-color: {BORDER_STRONG};
-        border-bottom-color: {ACCENT_BLUE};
+        border-color: {rgba(BORDER_STRONG, 0.42)};
+        border-bottom-color: {rgba(ACCENT_BLUE, 0.56)};
     }}
     QTabBar::tab:hover:!selected {{
         color: {TEXT_PRIMARY};
         background: {rgba(ACCENT_SLATE, 0.08)};
     }}
     QSplitter::handle {{
-        background: {DIVIDER};
+        background: {rgba(DIVIDER, 0.55)};
     }}
     QTableWidget#MarketTable,
     QTableWidget#CompactTable {{
         background: {BACKGROUND_TABLE};
-        alternate-background-color: {BACKGROUND_CARD_ALT};
+        alternate-background-color: {rgba(BACKGROUND_CARD_ALT, 0.78)};
         color: {TEXT_PRIMARY};
-        border: 1px solid {BORDER_SUBTLE};
+        border: 1px solid {rgba(BORDER_SUBTLE, 0.50)};
         border-radius: {RADIUS_LG}px;
         gridline-color: transparent;
-        selection-background-color: {rgba(ACCENT_BLUE, 0.24)};
+        selection-background-color: {rgba(ACCENT_BLUE, 0.18)};
         selection-color: {TEXT_PRIMARY};
         outline: 0;
     }}
     QTableWidget#MarketTable::item:selected {{
-        background: {rgba(ACCENT_BLUE, 0.26)};
-        border-top: 1px solid {rgba(ACCENT_BLUE, 0.64)};
-        border-bottom: 1px solid {rgba(ACCENT_BLUE, 0.64)};
+        background: {rgba(ACCENT_BLUE, 0.18)};
+        border-top: 1px solid {rgba(ACCENT_BLUE, 0.26)};
+        border-bottom: 1px solid {rgba(ACCENT_BLUE, 0.26)};
     }}
     QTableWidget#CompactTable::item:selected {{
-        background: {rgba(ACCENT_BLUE, 0.16)};
-        border-top: 1px solid {rgba(ACCENT_BLUE, 0.42)};
-        border-bottom: 1px solid {rgba(ACCENT_BLUE, 0.42)};
+        background: {rgba(ACCENT_BLUE, 0.14)};
+        border-top: 1px solid {rgba(ACCENT_BLUE, 0.22)};
+        border-bottom: 1px solid {rgba(ACCENT_BLUE, 0.22)};
     }}
     QHeaderView::section {{
         background: {BACKGROUND_CARD_ALT};
         color: {TEXT_SECONDARY};
         border: none;
-        border-bottom: 1px solid {DIVIDER};
-        padding: 10px 8px;
+        border-bottom: 1px solid {rgba(DIVIDER, 0.66)};
+        padding: 8px 8px;
         font-size: 11px;
         font-weight: 700;
     }}
     QTableCornerButton::section {{
         background: {BACKGROUND_CARD_ALT};
         border: none;
-        border-bottom: 1px solid {DIVIDER};
+        border-bottom: 1px solid {rgba(DIVIDER, 0.66)};
     }}
     QAbstractItemView {{
         background: transparent;
@@ -559,10 +559,15 @@ def build_stylesheet() -> str:
     QPlainTextEdit#LogView {{
         background: {BACKGROUND_TABLE};
         color: {TEXT_SECONDARY};
-        border: 1px solid {BORDER_SUBTLE};
+        border: 1px solid {rgba(BORDER_SUBTLE, 0.48)};
         border-radius: {RADIUS_LG}px;
         padding: 10px 12px;
-        selection-background-color: {rgba(ACCENT_BLUE, 0.24)};
+        selection-background-color: {rgba(ACCENT_BLUE, 0.18)};
+    }}
+    QWidget#TableEmptyOverlay {{
+        background: {rgba(BACKGROUND_CARD_ALT, 0.34)};
+        border: 1px solid {rgba(BORDER_SUBTLE, 0.30)};
+        border-radius: {RADIUS_MD}px;
     }}
     QScrollBar:vertical {{
         width: 12px;
@@ -570,12 +575,12 @@ def build_stylesheet() -> str:
         margin: 4px 0;
     }}
     QScrollBar::handle:vertical {{
-        background: {rgba(ACCENT_SLATE, 0.24)};
+        background: {rgba(ACCENT_SLATE, 0.18)};
         min-height: 28px;
         border-radius: 6px;
     }}
     QScrollBar::handle:vertical:hover {{
-        background: {rgba(ACCENT_SLATE, 0.42)};
+        background: {rgba(ACCENT_SLATE, 0.30)};
     }}
     QScrollBar::add-line:vertical,
     QScrollBar::sub-line:vertical,
