@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shlex
 import subprocess
 import sys
 from logging.handlers import RotatingFileHandler
@@ -15,6 +16,7 @@ if str(ROOT) not in sys.path:
 
 from infra.config import load_app_config
 from infra.mt5.runtime import apply_mt5_window_mode, launch_mt5_terminal, load_mt5_runtime_settings, wait_for_mt5_terminal
+from infra.process_lock import pid_exists
 from scripts.portable.env_loader import load_portable_environment
 
 
@@ -49,14 +51,47 @@ def _resolve_python_executable(root: Path) -> Path:
     raise FileNotFoundError("No local Python runtime was found. Expected .venv\\Scripts\\python.exe or python_embedded\\python.exe.")
 
 
+def _resolve_run_mode(argv: list[str]) -> str | None:
+    normalized = {str(arg).strip().lower() for arg in argv if str(arg).strip()}
+    if "--desktop" in normalized:
+        return "desktop"
+    if "--headless" in normalized:
+        return "headless"
+    return None
+
+
+def _existing_app_instance_pid(home_root: Path) -> int | None:
+    lock_path = home_root / "data" / "app_instance.lock"
+    if not lock_path.exists():
+        return None
+    try:
+        pid = int(lock_path.read_text(encoding="utf-8").strip() or "0")
+    except Exception:
+        return None
+    if pid_exists(pid):
+        return pid
+    try:
+        lock_path.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return None
+
+
 def main() -> int:
     root = ROOT
+    mode_override = _resolve_run_mode(sys.argv[1:])
     env = load_portable_environment(root)
+    if mode_override:
+        env["OPENCLAW_BOT_RUN_MODE"] = mode_override
     os.environ.update(env)
 
     logs_dir = Path(env["OPENCLAW_LOGS_DIR"])
     logs_dir.mkdir(parents=True, exist_ok=True)
     logger = _build_logger(logs_dir / "launcher.log")
+    existing_pid = _existing_app_instance_pid(Path(env["OPENCLAW_HOME"]))
+    if existing_pid:
+        logger.info("Liquidity Sniper is already running under PID %s. Launcher will exit.", existing_pid)
+        return 0
 
     settings = load_mt5_runtime_settings()
     terminal_path = settings.terminal_path
@@ -115,13 +150,28 @@ def main() -> int:
 
     child_env = dict(env)
     child_env["OPENCLAW_PYTHON_EXE"] = str(python_executable)
-    logger.info("Starting supervised bot loop...")
+    run_mode = str(env.get("OPENCLAW_BOT_RUN_MODE", "headless")).strip().lower()
+    app_args_raw = str(env.get("OPENCLAW_APP_ARGS", "")).strip()
+    app_args = shlex.split(app_args_raw, posix=False) if app_args_raw else []
+
+    if run_mode == "headless":
+        logger.info("Starting supervised bot loop...")
+        completed = subprocess.call(
+            ["cmd.exe", "/c", str(restart_script)],
+            cwd=str(root),
+            env=child_env,
+        )
+        logger.info("Supervisor exited with code %s", completed)
+        return int(completed)
+
+    logger.info("Starting desktop UI...")
+    command = [str(python_executable), str(root / "main.py"), *app_args]
     completed = subprocess.call(
-        ["cmd.exe", "/c", str(restart_script)],
+        command,
         cwd=str(root),
         env=child_env,
     )
-    logger.info("Supervisor exited with code %s", completed)
+    logger.info("Desktop UI exited with code %s", completed)
     return int(completed)
 
 

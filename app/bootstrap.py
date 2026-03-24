@@ -1,6 +1,9 @@
 import argparse
 import time
 
+from infra.config import DATA_DIR
+from infra.process_lock import ProcessFileLock
+
 from .controller import AppController
 
 
@@ -15,8 +18,14 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
-    controller = AppController()
+    instance_lock = ProcessFileLock(DATA_DIR / "app_instance.lock")
+    if not instance_lock.acquire():
+        print("Liquidity Sniper is already running. Close the existing instance first.")
+        return 9
+
+    controller = None
     try:
+        controller = AppController()
         if args.interval:
             controller.set_interval(args.interval)
 
@@ -40,4 +49,6 @@ def main(argv=None):
     except KeyboardInterrupt:
         return 0
     finally:
-        controller.shutdown()
+        if controller is not None:
+            controller.shutdown()
+        instance_lock.release()

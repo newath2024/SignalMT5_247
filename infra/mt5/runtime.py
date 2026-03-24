@@ -24,6 +24,7 @@ class MT5RuntimeSettings:
     init_retry_delay_sec: float
     launch_delay_sec: float
     auto_launch: bool
+    init_mode: str
     require_saved_session: bool
     max_tick_age_sec: int
     window_mode: str
@@ -131,6 +132,10 @@ def load_mt5_runtime_settings() -> MT5RuntimeSettings:
     if window_mode not in {"normal", "minimize", "hide"}:
         window_mode = "normal"
 
+    init_mode = str(os.getenv("OPENCLAW_MT5_INIT_MODE", "auto")).strip().lower()
+    if init_mode not in {"auto", "path", "attach"}:
+        init_mode = "auto"
+
     return MT5RuntimeSettings(
         terminal_path=terminal_path,
         portable_root=portable_root,
@@ -139,6 +144,7 @@ def load_mt5_runtime_settings() -> MT5RuntimeSettings:
         init_retry_delay_sec=_env_float("OPENCLAW_MT5_INIT_RETRY_DELAY_SEC", 3.0, minimum=0.5),
         launch_delay_sec=_env_float("OPENCLAW_MT5_LAUNCH_DELAY_SEC", 1.0, minimum=0.0),
         auto_launch=_env_flag("OPENCLAW_MT5_AUTO_LAUNCH", True),
+        init_mode=init_mode,
         require_saved_session=_env_flag("OPENCLAW_MT5_REQUIRE_SAVED_SESSION", True),
         max_tick_age_sec=_env_int("OPENCLAW_MT5_TICK_MAX_AGE_SEC", 0, minimum=0),
         window_mode=window_mode,
@@ -364,7 +370,16 @@ def connect_mt5_with_retry(mt5, symbol: str | None = None, settings: MT5RuntimeS
         except Exception:
             pass
 
-        if not mt5.initialize(str(settings.terminal_path)):
+        init_mode = settings.init_mode
+        if init_mode == "auto":
+            init_mode = "attach" if settings.auto_launch else "path"
+
+        if init_mode == "attach":
+            initialized = mt5.initialize()
+        else:
+            initialized = mt5.initialize(str(settings.terminal_path))
+
+        if not initialized:
             error = mt5.last_error()
             last_report = _session_message(
                 "initialize_failed",
@@ -384,7 +399,10 @@ def connect_mt5_with_retry(mt5, symbol: str | None = None, settings: MT5RuntimeS
             "warn",
             "MT5 connection attempt did not become ready",
             phase="connection",
-            reason=f"attempt={attempt}/{settings.init_retries} state={last_report.state} detail={last_report.message}",
+            reason=(
+                f"attempt={attempt}/{settings.init_retries} init_mode={init_mode} "
+                f"state={last_report.state} detail={last_report.message}"
+            ),
         )
 
     return last_report

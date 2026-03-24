@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import os
 import threading
 import time
+from pathlib import Path
 
 import requests
+
+from infra.config.paths import DATA_DIR
+from infra.process_lock import ProcessFileLock
 
 
 class TelegramCommandBot:
@@ -18,6 +23,7 @@ class TelegramCommandBot:
         self._thread: threading.Thread | None = None
         self._stop_event: threading.Event | None = None
         self._update_offset: int | None = None
+        self._process_lock = ProcessFileLock(Path(DATA_DIR) / "telegram_command_bot.lock")
 
     def start(self):
         with self._lock:
@@ -33,6 +39,13 @@ class TelegramCommandBot:
                     reason=f"missing {', '.join(self.notifier.missing_fields())}",
                 )
                 return False, "Telegram is not configured."
+            if not self._acquire_process_lock():
+                self.logger.warn(
+                    "Telegram command bot skipped",
+                    phase="telegram",
+                    reason="another process already owns the Telegram polling lock",
+                )
+                return False, "Telegram polling is already active in another process."
             self._stop_event = threading.Event()
             self._thread = threading.Thread(target=self._poll_loop, name="OpenClawTelegramCommandBot", daemon=True)
             self._thread.start()
@@ -49,7 +62,14 @@ class TelegramCommandBot:
             stop_event.set()
         if thread is not None:
             thread.join(timeout=3.0)
+        self._release_process_lock()
         return True, "Telegram command bot stopped."
+
+    def _acquire_process_lock(self) -> bool:
+        return self._process_lock.acquire()
+
+    def _release_process_lock(self) -> None:
+        self._process_lock.release()
 
     def _poll_loop(self):
         while self._stop_event is not None and not self._stop_event.is_set():
