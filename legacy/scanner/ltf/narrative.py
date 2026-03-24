@@ -145,6 +145,18 @@ def _find_ifvg(rates, bias, candidate, mss, current_price, point):
     return ifvg
 
 
+def _primary_candidate_rank(item):
+    # Newer external liquidity touches should immediately take control of the
+    # narrative, even if an older AS/LO sweep is still waiting for MSS/iFVG.
+    return (
+        item["primary_event"].sweep_index,
+        1 if item["ifvg"] is not None else 0,
+        1 if item["mss"] is not None else 0,
+        1 if item["classification"].get("type") == "reversal" else 0,
+        item["score"],
+    )
+
+
 def _build_timeline(rates, bias, primary_event, displacement, mss, ifvg, opposite_event=None):
     events = [
         NarrativeEvent(
@@ -333,16 +345,7 @@ def _analyze_side(
             }
         )
 
-    evaluated.sort(
-        key=lambda item: (
-            1 if item["ifvg"] is not None else 0,
-            1 if item["mss"] is not None else 0,
-            1 if item["classification"].get("type") == "reversal" else 0,
-            item["score"],
-            item["primary_event"].sweep_index,
-        ),
-        reverse=True,
-    )
+    evaluated.sort(key=_primary_candidate_rank, reverse=True)
     best = evaluated[0]
     best["primary_event"].is_primary_candidate = True
 
