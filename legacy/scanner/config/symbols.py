@@ -38,5 +38,21 @@ HISTORY_BARS = {
 }
 
 CHART_WINDOWS = {"H4": 70, "H1": 90, "M30": 85, "M15": 70, "M5": 90, "M3": 110}
-ASIA_SESSION_UTC = (0, 8)
-LONDON_SESSION_UTC = (8, 11)
+SESSION_DEFINITIONS = {
+    "asia": {
+        "label": "Asia",
+        "timezone": "Asia/Tokyo",
+        "start_hour_local": 8,
+        "end_hour_local": 16,
+        "high_label": "ASH",
+        "low_label": "ASL",
+    },
+    "london": {
+        "label": "London",
+        "timezone": "Europe/London",
+        "start_hour_local": 8,
+        "end_hour_local": 11,
+        "high_label": "LOH",
+        "low_label": "LOL",
+    },
+}
