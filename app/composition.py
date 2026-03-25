@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.runtime import ScannerEngine
-from domain.strategy import StrategyEngine
+from domain.engine import StrategyEngine
 from infra.config import AppConfig
 from infra.logging import StructuredLogger
 from infra.mt5.gateway import MT5DataGateway

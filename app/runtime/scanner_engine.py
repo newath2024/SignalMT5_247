@@ -3,7 +3,7 @@ import time
 import os
 
 from domain.enums import SetupPhase, SetupState
-from domain.strategy.reasoning import describe_error
+from domain.engine.reasoning import describe_error
 
 
 class ScannerEngine:

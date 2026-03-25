@@ -14,8 +14,8 @@ from domain.strategy.pipeline import (
 
 
 class StrategyPipelineTests(unittest.TestCase):
-    @patch("domain.strategy.pipeline.derive_htf_bias")
-    @patch("domain.strategy.pipeline.detect_htf_context")
+    @patch("domain.engine.context.derive_htf_bias")
+    @patch("domain.engine.context.detect_htf_context")
     def test_build_htf_context_prefers_best_directional_context(self, detect_htf_context_mock, derive_htf_bias_mock):
         long_context = {
             "bias": "Long",
@@ -41,9 +41,9 @@ class StrategyPipelineTests(unittest.TestCase):
         self.assertEqual(result.primary_context, long_context)
         self.assertEqual(result.best_directional_context, long_context)
 
-    @patch("domain.strategy.pipeline.refresh_htf_context")
-    @patch("domain.strategy.pipeline.watch_has_expired")
-    @patch("domain.strategy.pipeline.watch_is_invalidated")
+    @patch("domain.engine.watch_state.refresh_htf_context")
+    @patch("domain.engine.watch_state.watch_has_expired")
+    @patch("domain.engine.watch_state.watch_is_invalidated")
     def test_refresh_active_watches_removes_expired_and_invalidated(
         self,
         watch_is_invalidated_mock,
@@ -67,7 +67,7 @@ class StrategyPipelineTests(unittest.TestCase):
             [("expired", "expired"), ("invalid", "entry invalidated")],
         )
 
-    @patch("domain.strategy.pipeline.detect_confirmed_signal")
+    @patch("domain.engine.resolution.detect_confirmed_signal")
     def test_resolve_confirmed_signal_marks_ambiguous_competition_as_rejection(self, detect_confirmed_signal_mock):
         primary_context = {"bias": "Long", "zone": {"label": "H1 OB"}}
         detect_confirmed_signal_mock.return_value = (None, "ambiguous competing signals")
@@ -102,7 +102,7 @@ class StrategyPipelineTests(unittest.TestCase):
         self.assertEqual(result.phase, SetupPhase.READY.value)
         self.assertEqual(result.waiting_for, "entry")
 
-    @patch("domain.strategy.pipeline.detect_watch_candidates")
+    @patch("domain.engine.watch_state.detect_watch_candidates")
     def test_find_new_watch_candidates_uses_derived_confirmation_frames(self, detect_watch_candidates_mock):
         detect_watch_candidates_mock.return_value = ([], [])
 
@@ -121,7 +121,7 @@ class StrategyPipelineTests(unittest.TestCase):
         )
         self.assertEqual(result.active_pool, [])
 
-    @patch("domain.strategy.pipeline.compute_setup_score")
+    @patch("domain.scoring.compute_setup_score")
     def test_score_setup_returns_existing_score_contract(self, compute_setup_score_mock):
         compute_setup_score_mock.return_value = (8.5, "A", {"htf": 3.0})
 

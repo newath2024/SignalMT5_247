@@ -2,6 +2,7 @@ import json
 
 import requests
 
+from domain.alerts import build_watch_armed_message
 from legacy.bridges.notifications import build_signal_caption, build_signal_charts
 
 
@@ -56,16 +57,7 @@ class TelegramNotifier:
         if not self.is_configured():
             return False, f"missing {', '.join(self.missing_fields())}"
 
-        text = "\n".join(
-            [
-                f"[WATCH] {watch['symbol']} {watch['timeframe']} armed after structural sweep",
-                f"Bias: {watch['bias']}",
-                f"HTF: {watch['htf_context']}",
-                f"Sweep: {', '.join(watch.get('swept_liquidity', [])) or '-'}",
-                "Entry model: first edge of strict iFVG",
-                "SL model: origin candle extreme",
-            ]
-        )
+        text = build_watch_armed_message(watch)
         try:
             self._send_message(text)
             return True, None

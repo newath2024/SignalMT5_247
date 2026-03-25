@@ -1,4 +1,4 @@
-"""Domain-layer exports for strategy evaluation, states, and models."""
+"""Domain-layer exports for strategy evaluation, states, and compatibility models."""
 
 from .enums import AlertMode, ScanPhase, SetupPhase, SetupState, SignalStage, SymbolHealth
 from .models import AlertRecordModel, SymbolStateModel, TimelineEventModel, TimelineModel, WatchPipelineModel

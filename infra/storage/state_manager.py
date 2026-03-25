@@ -7,13 +7,13 @@ from pathlib import Path
 from typing import Any
 
 from domain.enums import SignalStage
-from domain.models import AlertRecordModel, TimelineEventModel
 from infra.config.paths import (
     STATE_FILE,
     legacy_alert_cache_candidates,
     legacy_watch_cache_candidates,
 )
 
+from domain.models.records import AlertRecordModel, TimelineEventModel
 from infra.storage.database import SQLiteStore
 
 
