@@ -1,5 +1,4 @@
 from ..config.ltf import (
-    EXTERNAL_LIQUIDITY_LEVELS,
     LTF_ALIGNED_SWEEP_DISPLACEMENT_MIN_QUALITY,
     LTF_ALIGNED_SWEEP_IFVG_MIN_QUALITY,
     LTF_ALIGNED_SWEEP_RECLAIM_MIN_QUALITY,
@@ -28,8 +27,6 @@ from ..config.ltf import (
     LTF_SWEEP_MIN_DEPTH_RANGE_RATIO,
     LTF_SWEEP_QUALITY_BASE,
     LTF_SWEEP_QUALITY_DEPTH_SCALE,
-    LTF_SWEEP_QUALITY_EXTERNAL_BONUS_CAP,
-    LTF_SWEEP_QUALITY_EXTERNAL_BONUS_STEP,
     LTF_SWEEP_QUALITY_RECLAIM_BONUS,
     LTF_SWEEP_QUALITY_WICK_SCALE,
     LTF_SWEEP_SCAN_BARS,
@@ -194,22 +191,7 @@ def _build_rejection_debug(
     return debug
 
 
-def find_swept_external_liquidity(bias, sweep_high, sweep_low, sweep_close, reference_levels, point):
-    swept = []
-    for label in EXTERNAL_LIQUIDITY_LEVELS[bias]:
-        level = reference_levels.get(label)
-        if level is None:
-            continue
-        if bias == "Long":
-            if sweep_low < level - point * 2 and sweep_close > level:
-                swept.append(label)
-        else:
-            if sweep_high > level + point * 2 and sweep_close < level:
-                swept.append(label)
-    return swept
-
-
-def detect_sweep_candidates(rates, bias, point, reference_levels):
+def detect_sweep_candidates(rates, bias, point):
     if rates is None or len(rates) < 30:
         return []
 
@@ -256,26 +238,14 @@ def detect_sweep_candidates(rates, bias, point, reference_levels):
         if not reclaim:
             continue
 
-        swept_external = find_swept_external_liquidity(
-            bias,
-            sweep_high,
-            sweep_low,
-            sweep_close,
-            reference_levels,
-            point,
-        )
-        if not swept_external:
-            continue
+        reference_price = reference_low if bias == "Long" else reference_high
+        swept_external = ["sell-side liquidity" if bias == "Long" else "buy-side liquidity"]
 
         sweep_quality = clamp(
             LTF_SWEEP_QUALITY_BASE
             + clamp(sweep_depth / max(avg_range * 0.45, point * 4)) * LTF_SWEEP_QUALITY_DEPTH_SCALE
             + wick_ratio * LTF_SWEEP_QUALITY_WICK_SCALE
             + (LTF_SWEEP_QUALITY_RECLAIM_BONUS if reclaim else 0.0)
-            + min(
-                LTF_SWEEP_QUALITY_EXTERNAL_BONUS_CAP,
-                LTF_SWEEP_QUALITY_EXTERNAL_BONUS_STEP * len(swept_external),
-            )
         )
 
         candidates.append(
@@ -287,22 +257,18 @@ def detect_sweep_candidates(rates, bias, point, reference_levels):
                 "sweep_quality": sweep_quality,
                 "avg_range": avg_range,
                 "swept_external": swept_external,
+                "reference_price": reference_price,
             }
         )
 
     return candidates
 
 
-def evaluate_reclaim_quality(rates, bias, sweep_candidate, reference_levels, ifvg, point, anchor_index=None):
-    swept_levels = [
-        float(reference_levels[label])
-        for label in sweep_candidate["swept_external"]
-        if label in reference_levels
-    ]
-    if not swept_levels:
+def evaluate_reclaim_quality(rates, bias, sweep_candidate, ifvg, point, anchor_index=None):
+    reclaimed_level = sweep_candidate.get("reference_price")
+    if reclaimed_level is None:
         return {"valid": False, "quality": 0.0}
-
-    reclaimed_level = max(swept_levels) if bias == "Long" else min(swept_levels)
+    reclaimed_level = float(reclaimed_level)
     reclaim_threshold = max(sweep_candidate["avg_range"] * LTF_RECLAIM_MIN_DISTANCE_RATIO, point * 2)
     sweep_index = sweep_candidate["sweep_index"]
     if anchor_index is None:
@@ -514,7 +480,7 @@ def is_continuation_sweep(classification):
     return classification["type"] == "continuation"
 
 
-def detect_ltf_watch_trigger(rates, bias, current_price, point, timeframe_name, reference_levels, context):
+def detect_ltf_watch_trigger(rates, bias, current_price, point, timeframe_name, context):
     from .narrative import build_ltf_narrative, narrative_to_watch_trigger
 
     narrative = build_ltf_narrative(
@@ -523,7 +489,6 @@ def detect_ltf_watch_trigger(rates, bias, current_price, point, timeframe_name, 
         current_price,
         point,
         timeframe_name,
-        reference_levels,
         context,
     )
     return narrative_to_watch_trigger(narrative)

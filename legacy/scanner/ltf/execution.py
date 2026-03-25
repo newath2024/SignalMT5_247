@@ -60,7 +60,7 @@ def compute_execution_plan(snapshot, trigger, trigger_timeframe):
     }
 
 
-def detect_ltf_trigger(rates, bias, current_price, point, timeframe_name, reference_levels):
+def detect_ltf_trigger(rates, bias, current_price, point, timeframe_name):
     from .trigger import detect_mss_confirmation
 
     watch_trigger, _ = detect_ltf_watch_trigger(
@@ -69,7 +69,6 @@ def detect_ltf_trigger(rates, bias, current_price, point, timeframe_name, refere
         current_price,
         point,
         timeframe_name,
-        reference_levels,
         {"trend_alignment": "aligned", "structure_trend": "Range"},
     )
     if watch_trigger is None:

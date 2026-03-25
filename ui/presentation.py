@@ -33,7 +33,7 @@ STATE_META = {
         "severity": "watch",
     },
     "session_only_context": {
-        "label": "Session Reference Only",
+        "label": "Weak Structure Context",
         "bg": "#fef3c7",
         "fg": "#92400e",
         "icon": "*",
@@ -191,18 +191,6 @@ UNKNOWN_STATE_META = {
 }
 
 
-LIQUIDITY_SHORT_LABELS = {
-    "Previous Day High": "PDH",
-    "Previous Day Low": "PDL",
-    "Previous Week High": "PWH",
-    "Previous Week Low": "PWL",
-    "Asia Session High": "ASH",
-    "Asia Session Low": "ASL",
-    "London Session High": "LOH",
-    "London Session Low": "LOL",
-}
-
-
 PRIORITY_META = {
     "high": {"label": "High", "rank": 0, "actionable": True},
     "medium": {"label": "Medium", "rank": 1, "actionable": False},
@@ -281,33 +269,7 @@ def _timestamp_value(value) -> float:
 
 def abbreviate_liquidity_label(text: str | None) -> str:
     value = str(text or "").strip()
-    if not value:
-        return "-"
-    for long_label, short_label in LIQUIDITY_SHORT_LABELS.items():
-        value = value.replace(long_label, short_label)
-    return value
-
-
-def _extract_liquidity_label(*values) -> str | None:
-    for value in values:
-        lowered = str(value or "").lower()
-        for label in LIQUIDITY_SHORT_LABELS:
-            if label.lower() in lowered:
-                return label
-    return None
-
-
-def _normalize_liquidity_state(value: str | None) -> str:
-    text = str(value or "").strip().lower()
-    if text in {"swept_and_reclaimed", "sweep + reclaim"}:
-        return "Sweep + reclaim"
-    if text == "swept":
-        return "Swept"
-    if text == "tapped":
-        return "Tapped"
-    if text in {"at", "untouched"}:
-        return "At"
-    return ""
+    return value or "-"
 
 
 def format_htf_context_short(row: dict | None) -> str:
@@ -315,14 +277,6 @@ def format_htf_context_short(row: dict | None) -> str:
     detail = dict(payload.get("detail") or {})
     raw_context = str(detail.get("htf_context") or payload.get("htf_context") or "-").strip()
     zone_type = str(detail.get("htf_zone_type") or "").strip()
-    liquidity_state = _normalize_liquidity_state(detail.get("liquidity_interaction_state"))
-    liquidity_label = _extract_liquidity_label(raw_context, zone_type, detail.get("zone"), detail.get("htf_zone_source"))
-
-    if liquidity_label:
-        short_label = LIQUIDITY_SHORT_LABELS[liquidity_label]
-        if liquidity_state:
-            return f"{liquidity_state} {short_label}".strip()
-        return short_label
 
     if zone_type and zone_type != "-":
         return abbreviate_liquidity_label(zone_type)
@@ -351,7 +305,7 @@ def format_symbol_focus(row: dict | None) -> str:
     if state == "htf_weak_context":
         return "Low-quality HTF context"
     if state == "session_only_context":
-        return "Session reference only"
+        return "Weak structure context"
     if state == "no_structural_backing":
         return "Awaiting higher timeframe confirmation"
     if state == "degraded":

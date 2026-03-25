@@ -7,11 +7,10 @@ from ..config.ltf import (
     MIN_RR,
     MIN_SCORE,
 )
-from ..utils import clamp, get_session_quality
+from ..utils import clamp
 
 
 def score_signal(context, trigger, ifvg, risk, rr_value):
-    session_quality, session_note = get_session_quality()
     entry_location = clamp(
         LTF_ENTRY_LOCATION_IFVG_WEIGHT * ifvg["entry_quality"]
         + LTF_ENTRY_LOCATION_MODE_WEIGHT
@@ -33,13 +32,11 @@ def score_signal(context, trigger, ifvg, risk, rr_value):
         "entry_location": entry_location,
         "structural_stop_validity": stop_validity,
         "rr": rr_score,
-        "session_quality": session_quality,
         "no_chase": trigger["execution"]["no_chase"],
     }
     score = round(sum(score_components.values()), 1)
     return {
         "score": score,
         "score_components": score_components,
-        "session_note": session_note,
         "valid": score >= MIN_SCORE,
     }

@@ -23,14 +23,13 @@ def get_ltf_config() -> dict:
     }
 
 
-def build_watch_trigger(rates, bias, current_price, point, timeframe_name, reference_levels, context):
+def build_watch_trigger(rates, bias, current_price, point, timeframe_name, _unused_legacy_input, context):
     return detect_ltf_watch_trigger(
         rates,
         bias,
         current_price,
         point,
         timeframe_name,
-        reference_levels,
         context,
     )
 

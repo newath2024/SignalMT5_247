@@ -42,33 +42,20 @@ def format_detail_text(value: Any) -> str:
         text = str(value or "-").strip()
     if not text or text == "-":
         return "--"
-    return (
-        text.replace("Previous Day High", "PDH")
-        .replace("Previous Day Low", "PDL")
-        .replace("Previous Week High", "PWH")
-        .replace("Previous Week Low", "PWL")
-        .replace("Asia Session High", "ASH")
-        .replace("Asia Session Low", "ASL")
-        .replace("London Session High", "LOH")
-        .replace("London Session Low", "LOL")
-    )
+    return text
 
 
 def format_structure_note(payload: dict[str, Any] | None, detail: dict[str, Any]) -> str:
-    liquidity_state = str(detail.get("liquidity_interaction_state") or "").strip()
     reaction = str(detail.get("reaction_strength") or "--").strip()
     market_bias = str(detail.get("market_structure_bias") or detail.get("htf_bias") or "--").strip()
     tier = str(detail.get("htf_tier") or "--").strip()
     strength = str(detail.get("context_strength") or "--").strip()
     structural = str(detail.get("confluence_structural") or "--").strip().lower()
     higher_tf = str(detail.get("confluence_higher_tf") or "--").strip().lower()
-    if liquidity_state and liquidity_state not in {"-", "Untouched"}:
-        context = format_htf_context_short(payload)
-        if tier == "C" and structural != "yes" and higher_tf != "yes":
-            return f"{context} | no structural confluence | context weak | {market_bias}"
-        return f"{context} | tier {tier} | {strength} | {reaction} reaction | {market_bias}"
     zone_type = str(detail.get("htf_zone_type") or "").strip()
     if zone_type and zone_type != "-":
+        if tier == "C" and structural != "yes" and higher_tf != "yes":
+            return f"{zone_type} | no structural confluence | context weak | {market_bias}"
         return f"{zone_type} | tier {tier} | {strength} | {reaction} reaction | {market_bias}"
     return format_detail_text(detail.get("htf_context_reason"))
 

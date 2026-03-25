@@ -5,7 +5,6 @@ from .sweep import (
     detect_sweep_candidates,
     find_first_touch_after_creation,
     find_ifvg_zone,
-    find_swept_external_liquidity,
     is_clean_ifvg_inversion,
 )
 from .trigger import detect_mss_confirmation, detect_signal, suppress_watch_alert
@@ -14,7 +13,6 @@ __all__ = [
     "find_first_touch_after_creation",
     "is_clean_ifvg_inversion",
     "find_ifvg_zone",
-    "find_swept_external_liquidity",
     "detect_sweep_candidates",
     "classify_sweep_type",
     "detect_ltf_watch_trigger",

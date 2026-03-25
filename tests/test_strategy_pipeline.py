@@ -6,6 +6,7 @@ from domain.enums import SetupPhase, SetupState
 from domain.strategy.pipeline import (
     build_htf_context,
     derive_display_state,
+    find_new_watch_candidates,
     refresh_active_watches,
     resolve_confirmed_signal,
     score_setup,
@@ -100,6 +101,25 @@ class StrategyPipelineTests(unittest.TestCase):
         self.assertEqual(result.state, SetupState.TRIGGERED.value)
         self.assertEqual(result.phase, SetupPhase.READY.value)
         self.assertEqual(result.waiting_for, "entry")
+
+    @patch("domain.strategy.pipeline.detect_watch_candidates")
+    def test_find_new_watch_candidates_uses_derived_confirmation_frames(self, detect_watch_candidates_mock):
+        detect_watch_candidates_mock.return_value = ([], [])
+
+        result = find_new_watch_candidates(
+            snapshot={"symbol": "EURUSD"},
+            contexts={"Long": {"zone": {"timeframe": "H1"}}},
+            active_htf="H1",
+            confirmation_timeframes=["M15", "M5"],
+            retained_watches=[],
+        )
+
+        detect_watch_candidates_mock.assert_called_once_with(
+            {"symbol": "EURUSD"},
+            {"Long": {"zone": {"timeframe": "H1"}}},
+            ["M15", "M5"],
+        )
+        self.assertEqual(result.active_pool, [])
 
     @patch("domain.strategy.pipeline.compute_setup_score")
     def test_score_setup_returns_existing_score_contract(self, compute_setup_score_mock):

@@ -1,4 +1,4 @@
-from ..config.ltf import EXTERNAL_LIQUIDITY_LEVELS, MIN_RR, SETUP_NAME, SIGNAL_EXPIRY_MINUTES
+from ..config.ltf import MIN_RR, SETUP_NAME, SIGNAL_EXPIRY_MINUTES
 from .invalidation import build_invalidation_lines
 from .scorer import score_signal
 from .targets import select_targets
@@ -30,11 +30,6 @@ def build_signal(snapshot, context, trigger, trigger_timeframe, all_htf_zones):
     narrative = trigger.get("narrative") or {}
     primary_sweep = narrative.get("primary_sweep") or {}
     opposite_sweep = narrative.get("opposite_sweep") or {}
-    liquidity_map = {
-        label: snapshot["reference_levels"][label]
-        for label in EXTERNAL_LIQUIDITY_LEVELS[bias]
-        if label in snapshot["reference_levels"]
-    }
     invalidation = build_invalidation_lines(
         bias,
         trigger_timeframe,
@@ -80,15 +75,12 @@ def build_signal(snapshot, context, trigger, trigger_timeframe, all_htf_zones):
         "trigger_summary": "TRIGGERED: narrative validated with primary sweep -> MSS -> strict iFVG",
         "watch_confirmed": True,
         "watch_status": "TRIGGERED",
-        "session_note": scoring["session_note"],
         "actionability": execution["actionability"],
         "htf_zone": context["zone"],
         "htf_chart_timeframe": (
             "H4"
-            if context["zone"]["timeframe"] in ("H4", "W1")
-            else "M30"
-            if context["zone"]["timeframe"] == "M30"
-            else "H1"
+            if context["zone"]["timeframe"] == "H4"
+            else context["zone"]["timeframe"]
         ),
         "sweep_index": trigger["sweep_index"],
         "sweep_price": trigger["sweep_level"],
@@ -101,7 +93,6 @@ def build_signal(snapshot, context, trigger, trigger_timeframe, all_htf_zones):
         "entry_edge": ifvg["entry_edge"],
         "bars_since_mss": trigger["bars_since_mss"],
         "swept_liquidity": swept_liquidity,
-        "liquidity_map": liquidity_map,
         "sweep_type": trigger.get("sweep_classification", {}).get("type", "reversal"),
         "narrative": narrative,
         "primary_sweep": primary_sweep,

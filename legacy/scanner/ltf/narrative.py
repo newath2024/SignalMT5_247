@@ -38,29 +38,20 @@ def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
     return max(low, min(high, float(value)))
 
 
-def _label_price_map(labels, reference_levels):
-    return {
-        str(label): float(reference_levels[label])
-        for label in labels
-        if label in reference_levels and reference_levels[label] is not None
-    }
-
-
-def _select_primary_label(labels, sweep_price, reference_levels):
-    price_map = _label_price_map(labels, reference_levels)
-    if not price_map:
-        return (labels or ["external_liquidity"])[0]
-    return min(price_map.items(), key=lambda item: abs(float(sweep_price) - float(item[1])))[0]
+def _select_primary_label(labels, bias):
+    if labels:
+        return str(labels[0])
+    return "sell-side liquidity" if bias == "Long" else "buy-side liquidity"
 
 
 def _liquidity_side_from_bias(bias: str) -> str:
     return "sell_side" if bias == "Long" else "buy_side"
 
 
-def _make_liquidity_event(rates, timeframe_name, bias, candidate, reference_levels, point):
+def _make_liquidity_event(rates, timeframe_name, bias, candidate, point):
     labels = list(candidate.get("swept_external") or [])
-    primary_label = _select_primary_label(labels, candidate["sweep_level"], reference_levels)
-    reference_price = reference_levels.get(primary_label)
+    primary_label = _select_primary_label(labels, bias)
+    reference_price = candidate.get("reference_price")
     sweep_index = int(candidate["sweep_index"])
     candle_open = float(_rate_value(rates, "open", sweep_index, candidate["sweep_level"]) or candidate["sweep_level"])
     candle_close = float(_rate_value(rates, "close", sweep_index, candidate["sweep_level"]) or candidate["sweep_level"])
@@ -94,7 +85,7 @@ def _make_liquidity_event(rates, timeframe_name, bias, candidate, reference_leve
         is_external_liquidity=bool(labels),
         close_reclaim=True,
         metadata={
-            "labels": labels,
+            "labels": labels or [primary_label],
             "structure_level": float(candidate["structure_level"]),
         },
     )
@@ -255,7 +246,6 @@ def _analyze_side(
     timeframe_name,
     current_price,
     point,
-    reference_levels,
     context,
     same_side_candidates,
     opposite_side_candidates,
@@ -277,7 +267,7 @@ def _analyze_side(
     opposite_event_rows = []
     opposite_bias = "Short" if bias == "Long" else "Long"
     for item in opposite_side_candidates:
-        event = _make_liquidity_event(rates, timeframe_name, opposite_bias, item, reference_levels, point)
+        event = _make_liquidity_event(rates, timeframe_name, opposite_bias, item, point)
         opposite_event_rows.append(
             {
                 "event": event,
@@ -288,7 +278,7 @@ def _analyze_side(
     opposite_event_rows.sort(key=lambda item: item["event"].sweep_index)
 
     for candidate in same_side_candidates:
-        primary_event = _make_liquidity_event(rates, timeframe_name, bias, candidate, reference_levels, point)
+        primary_event = _make_liquidity_event(rates, timeframe_name, bias, candidate, point)
         mss = _find_mss(rates, timeframe_name, bias, candidate, point)
         anchor_index = int(mss["mss_index"]) if mss is not None else int(candidate["sweep_index"]) + 1
         ifvg = _find_ifvg(rates, bias, candidate, mss, current_price, point)
@@ -298,7 +288,6 @@ def _analyze_side(
             rates,
             bias,
             candidate,
-            reference_levels,
             ifvg,
             point,
             anchor_index=anchor_index,
@@ -460,10 +449,10 @@ def _analyze_side(
     )
 
 
-def build_ltf_narrative(rates, bias, current_price, point, timeframe_name, reference_levels, context, symbol="-"):
-    same_side_candidates = detect_sweep_candidates(rates, bias, point, reference_levels)
+def build_ltf_narrative(rates, bias, current_price, point, timeframe_name, context, symbol="-"):
+    same_side_candidates = detect_sweep_candidates(rates, bias, point)
     opposite_bias = "Short" if bias == "Long" else "Long"
-    opposite_side_candidates = detect_sweep_candidates(rates, opposite_bias, point, reference_levels)
+    opposite_side_candidates = detect_sweep_candidates(rates, opposite_bias, point)
     same_side_candidates.sort(key=lambda item: int(item["sweep_index"]))
     opposite_side_candidates.sort(key=lambda item: int(item["sweep_index"]))
 
@@ -474,7 +463,6 @@ def build_ltf_narrative(rates, bias, current_price, point, timeframe_name, refer
         timeframe_name=timeframe_name,
         current_price=current_price,
         point=point,
-        reference_levels=reference_levels,
         context=context,
         same_side_candidates=same_side_candidates,
         opposite_side_candidates=opposite_side_candidates,

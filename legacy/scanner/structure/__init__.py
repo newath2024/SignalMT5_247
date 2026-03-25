@@ -1,5 +1,4 @@
 from .bos import is_valid_bos
-from .liquidity import find_swept_external_liquidity
 from .mss import detect_mss_break
 from .swings import (
     build_swing_structure,
@@ -21,5 +20,4 @@ __all__ = [
     "summarize_market_structure",
     "is_valid_bos",
     "detect_mss_break",
-    "find_swept_external_liquidity",
 ]

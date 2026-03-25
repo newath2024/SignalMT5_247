@@ -23,6 +23,7 @@
     ],
     "symbol_aliases": {},
     "htf_timeframes": [
+      "M15",
       "M30",
       "H1",
       "H4"
@@ -30,8 +31,10 @@
     "ltf_timeframes": [
       "M3",
       "M5",
-      "M15"
+      "M15",
+      "H1"
     ],
+    "confirmation_limit": 2,
     "loop_interval_sec": 60,
     "ob_fvg_mode": "medium",
     "strict_ifvg": true,

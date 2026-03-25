@@ -1,8 +1,8 @@
 from legacy.bridges.detection import build_signal_from_watch, build_watch_trigger, detect_mss_confirmation, get_ltf_config
+from domain.timeframes import timeframe_rank
 
 _LTF_CONFIG = get_ltf_config()
 SIGNAL_AMBIGUITY_DELTA = _LTF_CONFIG["signal_ambiguity_delta"]
-TIMEFRAME_PRIORITY = _LTF_CONFIG["timeframe_priority"]
 WATCH_EXPIRY_BARS = _LTF_CONFIG["watch_expiry_bars"]
 WATCH_INVALIDATION_BUFFER_POINTS = _LTF_CONFIG["watch_invalidation_buffer_points"]
 
@@ -81,7 +81,7 @@ def build_watch_setup(snapshot, context, trigger, trigger_timeframe):
     return watch_setup
 
 
-def detect_watch_candidates(snapshot, contexts, trigger_timeframes):
+def detect_watch_candidates(snapshot, contexts, confirmation_timeframes):
     watch_setups = []
     rejections = []
 
@@ -90,14 +90,14 @@ def detect_watch_candidates(snapshot, contexts, trigger_timeframes):
         if context is None:
             continue
 
-        for timeframe_name in trigger_timeframes:
+        active_htf = str((context.get("zone") or {}).get("timeframe") or "")
+        for timeframe_name in confirmation_timeframes:
             trigger, rejection = build_watch_trigger(
                 snapshot["rates"][timeframe_name],
                 bias,
                 snapshot["current_price"],
                 snapshot["point"],
                 timeframe_name,
-                snapshot["reference_levels"],
                 context,
             )
             if trigger is None:
@@ -114,7 +114,11 @@ def detect_watch_candidates(snapshot, contexts, trigger_timeframes):
                     )
                 continue
 
-            watch_setups.append(build_watch_setup(snapshot, context, trigger, timeframe_name))
+            watch = build_watch_setup(snapshot, context, trigger, timeframe_name)
+            watch["active_htf"] = active_htf
+            watch["source_zone_timeframe"] = active_htf
+            watch["confirmation_timeframes"] = list(confirmation_timeframes)
+            watch_setups.append(watch)
 
     return watch_setups, rejections
 
@@ -198,7 +202,7 @@ def detect_confirmed_signal(snapshot, active_watches, all_htf_zones):
     candidate_signals.sort(
         key=lambda item: (
             item["actionability"],
-            TIMEFRAME_PRIORITY[item["timeframe"]],
+            timeframe_rank(item["timeframe"]),
             item["score"],
             item["rr"],
             -item["bars_since_mss"],

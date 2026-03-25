@@ -49,7 +49,11 @@ def build_app_runtime(config: AppConfig) -> AppRuntime:
     symbol_registry = SymbolRegistry(config.scanner.symbols, config.scanner.symbol_aliases)
     runtime_state = RuntimeState(symbol_registry.get_all_symbols())
     notifier = TelegramNotifier(config.telegram, logger)
-    strategy = StrategyEngine(trigger_timeframes=config.scanner.ltf_timeframes)
+    strategy = StrategyEngine(
+        htf_timeframes=config.scanner.htf_timeframes,
+        confirmation_timeframes=config.scanner.confirmation_timeframes,
+        confirmation_limit=config.scanner.confirmation_limit,
+    )
     alert_service = AlertService(config, state_manager, notifier, logger)
     scan_service = ScanService(
         data_gateway=data_gateway,

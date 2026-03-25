@@ -157,7 +157,7 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             "Market Structure",
             (
                 ("market_structure_bias", "Market Bias"),
-                ("liquidity_interaction_state", "Liquidity"),
+                ("liquidity_interaction_state", "Context Model"),
                 ("reaction_strength", "Reaction"),
                 ("confluence_structural", "Structural Backing"),
                 ("confluence_higher_tf", "Higher TF Backing"),

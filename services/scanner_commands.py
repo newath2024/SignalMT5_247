@@ -289,7 +289,7 @@ class ScannerCommandService:
             SetupState.CONTEXT_FOUND.value: "Tracking",
             SetupState.HTF_CONTEXT_FOUND.value: "HTF Context Found",
             SetupState.HTF_WEAK_CONTEXT.value: "HTF Weak Context",
-            SetupState.SESSION_ONLY_CONTEXT.value: "Session Only Context",
+            SetupState.SESSION_ONLY_CONTEXT.value: "Weak Structure Context",
             SetupState.NO_STRUCTURAL_BACKING.value: "No Structural Backing",
             SetupState.AWAITING_LTF_SWEEP.value: "Awaiting LTF Sweep",
             SetupState.ARMED.value: "Armed",

@@ -2,7 +2,7 @@ from ..utils import format_price
 
 
 def build_signal_caption(signal):
-    swept_liquidity = ", ".join(signal.get("swept_liquidity", [])) or "external liquidity"
+    swept_liquidity = ", ".join(signal.get("swept_liquidity", [])) or "structural liquidity"
     digits = signal.get("digits", 5)
     entry_low = format_price(signal["entry_low"], digits)
     entry_high = format_price(signal["entry_high"], digits)
@@ -20,7 +20,7 @@ def build_signal_caption(signal):
         f"[SIGNAL] {signal['symbol']} {signal['timeframe']} - {signal['bias']}",
         f"Status: {signal.get('watch_status', 'Confirmed')}",
         f"HTF: {signal['htf_context']}",
-        f"LTF: {swept_liquidity}, MSS confirmed after HTF + sweep + iFVG watch setup",
+        f"LTF: {swept_liquidity}, MSS confirmed after HTF structure + sweep + iFVG watch setup",
         f"Entry: {entry_text}",
         f"SL: {stop_loss}",
         f"TP1: {tp1}",

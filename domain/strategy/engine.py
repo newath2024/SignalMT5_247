@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from domain.timeframes import TimeframePolicy
+
 from .pipeline import (
     build_htf_context,
     build_strategy_decision,
@@ -46,16 +48,29 @@ class StrategyDecision:
 
 
 class StrategyEngine:
-    def __init__(self, trigger_timeframes: list[str]):
-        self.trigger_timeframes = list(trigger_timeframes)
+    def __init__(
+        self,
+        *,
+        htf_timeframes: list[str],
+        confirmation_timeframes: list[str],
+        confirmation_limit: int = 2,
+    ):
+        self.timeframe_policy = TimeframePolicy(
+            htf_timeframes=list(htf_timeframes),
+            confirmation_timeframes=list(confirmation_timeframes),
+            confirmation_limit=confirmation_limit,
+        )
 
     def evaluate_symbol(self, snapshot: dict, active_watches: list[dict]) -> StrategyDecision:
-        htf_context_bundle = build_htf_context(snapshot)
+        htf_context_bundle = build_htf_context(snapshot, self.timeframe_policy.htf_timeframes)
         refreshed = refresh_active_watches(snapshot, active_watches)
+        active_htf = str((htf_context_bundle.primary_context or {}).get("zone", {}).get("timeframe") or "")
+        confirmation_timeframes = self.timeframe_policy.derive_confirmation_timeframes(active_htf) if active_htf else []
         candidates = find_new_watch_candidates(
             snapshot,
             htf_context_bundle.contexts,
-            self.trigger_timeframes,
+            active_htf,
+            confirmation_timeframes,
             refreshed.retained_watches,
         )
         resolution = resolve_confirmed_signal(

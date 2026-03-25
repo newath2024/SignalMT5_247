@@ -34,6 +34,7 @@ class HtfContextBundle:
     htf_bias: str
     primary_context: dict[str, Any] | None
     best_directional_context: dict[str, Any] | None
+    active_htf: str | None
 
 
 @dataclass(frozen=True)
@@ -154,9 +155,9 @@ def phase_for_rejection(rejection: dict[str, Any]) -> str:
     return SetupPhase.HTF_CONTEXT.value
 
 
-def build_htf_context(snapshot: dict[str, Any]) -> HtfContextBundle:
+def build_htf_context(snapshot: dict[str, Any], htf_timeframes: list[str] | None = None) -> HtfContextBundle:
     """Resolve HTF zones, selected contexts, and bias for the current snapshot."""
-    all_htf_zones, contexts = detect_htf_context(snapshot)
+    all_htf_zones, contexts = detect_htf_context(snapshot, allowed_timeframes=htf_timeframes)
     htf_bias, primary_context = derive_htf_bias(contexts)
     directional_contexts = [contexts.get("Long"), contexts.get("Short")]
     directional_contexts = [item for item in directional_contexts if item is not None]
@@ -167,6 +168,7 @@ def build_htf_context(snapshot: dict[str, Any]) -> HtfContextBundle:
         htf_bias=htf_bias,
         primary_context=primary_context,
         best_directional_context=best_directional_context,
+        active_htf=str((primary_context or {}).get("zone", {}).get("timeframe") or "") or None,
     )
 
 
@@ -186,14 +188,17 @@ def refresh_active_watches(snapshot: dict[str, Any], active_watches: list[dict[s
 def find_new_watch_candidates(
     snapshot: dict[str, Any],
     contexts: dict[str, Any],
-    trigger_timeframes: list[str],
+    active_htf: str,
+    confirmation_timeframes: list[str],
     retained_watches: list[dict[str, Any]],
 ) -> WatchCandidateResult:
     """Find new watch candidates and merge them into the active pool."""
-    new_watches, rejections = detect_watch_candidates(snapshot, contexts, trigger_timeframes)
+    new_watches, rejections = detect_watch_candidates(snapshot, contexts, confirmation_timeframes)
     retained_by_key = {item["watch_key"]: item for item in retained_watches}
     unique_new_watches: list[dict[str, Any]] = []
     for watch in new_watches:
+        watch["active_htf"] = active_htf
+        watch["confirmation_timeframes"] = list(confirmation_timeframes)
         watch["status"] = watch.get("status") or watch.get("narrative_state") or SetupState.WAITING_MSS.value
         watch["direction"] = watch.get("direction") or direction_label(watch.get("bias"))
         watch["waiting_for"] = waiting_for_from_watch(watch)
@@ -362,10 +367,7 @@ def derive_display_state(
         tier = str(zone.get("tier") or primary_context.get("tier") or "C").upper()
         context_strength = str(primary_context.get("context_strength") or zone.get("context_strength") or "weak").lower()
         if tier == "C":
-            if bool(primary_context.get("no_structural_backing")):
-                state = SetupState.NO_STRUCTURAL_BACKING.value
-            else:
-                state = SetupState.SESSION_ONLY_CONTEXT.value
+            state = SetupState.NO_STRUCTURAL_BACKING.value if bool(primary_context.get("no_structural_backing")) else SetupState.HTF_WEAK_CONTEXT.value
         elif context_strength == "weak":
             state = SetupState.HTF_WEAK_CONTEXT.value
         else:

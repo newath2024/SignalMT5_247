@@ -3,13 +3,13 @@ from pathlib import Path
 
 from ..config import CHART_WINDOWS
 from ..deps import CHARTING_AVAILABLE, Rectangle, plt
-from .annotations import configure_chart_axes, draw_candles, draw_reference_level, get_chart_window
+from .annotations import configure_chart_axes, draw_candles, get_chart_window
 
 
 def render_htf_chart(snapshot, signal, output_path):
     zone = signal.get("htf_zone")
     timeframe_name = signal.get("htf_chart_timeframe")
-    if not CHARTING_AVAILABLE or zone is None or timeframe_name not in ("M30", "H1", "H4"):
+    if not CHARTING_AVAILABLE or zone is None or timeframe_name not in ("M15", "M30", "H1", "H4"):
         return False
 
     rates = snapshot["rates"][timeframe_name]
@@ -47,7 +47,6 @@ def render_ltf_chart(snapshot, signal, output_path):
     mss_index = signal.get("mss_index")
     ifvg_source_index = signal.get("ifvg_source_index")
     ifvg_origin_candle_index = signal.get("ifvg_origin_candle_index")
-    liquidity_map = signal.get("liquidity_map", {})
     swept_liquidity = signal.get("swept_liquidity", [])
     if CHARTING_AVAILABLE is False or None in (sweep_index, mss_index, ifvg_source_index):
         return False
@@ -78,20 +77,6 @@ def render_ltf_chart(snapshot, signal, output_path):
     figure, ax = plt.subplots(figsize=(16, 8), dpi=150)
     configure_chart_axes(ax, window_rates, f"{snapshot['symbol']} {timeframe_name} - LTF Trigger")
     draw_candles(ax, window_rates, snapshot["point"])
-
-    line_palette = {
-        "PDH": "#3b82f6",
-        "PDL": "#3b82f6",
-        "PWH": "#a855f7",
-        "PWL": "#a855f7",
-        "ASH": "#ef4444",
-        "ASL": "#ef4444",
-        "LOH": "#f97316",
-        "LOL": "#16a34a",
-    }
-    for label, value in liquidity_map.items():
-        style = "--" if label in swept_liquidity else ":"
-        draw_reference_level(ax, value, label, line_palette.get(label, "#94a3b8"), style)
 
     ifvg_color = "#22c55e" if signal["bias"] == "Long" else "#f97316"
     ifvg_width = len(window_rates) - ifvg_x
@@ -182,7 +167,6 @@ def build_signal_charts(snapshot, signal):
         "tp1",
         "stop_loss",
         "swept_liquidity",
-        "liquidity_map",
     ]
     if any(signal.get(field) is None for field in required_fields):
         return None

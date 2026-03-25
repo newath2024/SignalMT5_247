@@ -19,18 +19,20 @@ from ..config.htf import (
     HTF_TOLERANCE_MIN_POINTS,
     HTF_TOLERANCE_ZONE_WIDTH_RATIO,
 )
-from .liquidity import evaluate_liquidity_level, is_liquidity_level
 from ..structure.swings import summarize_market_structure
 from ..utils import average_range, clamp, zone_distance, zone_mid, zone_width
 
 
 def determine_htf_structure(snapshot):
+    rates_m15 = snapshot["rates"]["M15"]
     rates_m30 = snapshot["rates"]["M30"]
     rates_h1 = snapshot["rates"]["H1"]
     rates_h4 = snapshot["rates"]["H4"]
+    avg_m15 = average_range(rates_m15, 20)
     avg_m30 = average_range(rates_m30, 20)
     avg_h1 = average_range(rates_h1, 20)
     avg_h4 = average_range(rates_h4, 20)
+    m15_structure = summarize_market_structure(rates_m15, avg_m15)
     m30_structure = summarize_market_structure(rates_m30, avg_m30)
     h1_structure = summarize_market_structure(rates_h1, avg_h1)
     h4_structure = summarize_market_structure(rates_h4, avg_h4)
@@ -44,6 +46,9 @@ def determine_htf_structure(snapshot):
     elif m30_structure["clear"]:
         trend = m30_structure["trend"]
         clear = trend != "Range"
+    elif m15_structure["clear"]:
+        trend = m15_structure["trend"]
+        clear = trend != "Range"
     else:
         trend = "Range"
         clear = False
@@ -51,6 +56,7 @@ def determine_htf_structure(snapshot):
     return {
         "trend": trend,
         "clear": clear,
+        "M15": m15_structure,
         "M30": m30_structure,
         "H1": h1_structure,
         "H4": h4_structure,
@@ -132,17 +138,16 @@ def _zone_invalidation_status(zone, rates, current_index) -> tuple[bool, str | N
 def evaluate_htf_zone(zone, snapshot, structure=None):
     price = snapshot["current_price"]
     point = snapshot["point"]
+    rates_m15 = snapshot["rates"]["M15"]
     rates_m30 = snapshot["rates"]["M30"]
     rates_h1 = snapshot["rates"]["H1"]
     rates_h4 = snapshot["rates"]["H4"]
     avg_h1 = average_range(rates_h1, 20)
     structure = structure or determine_htf_structure(snapshot)
 
-    if is_liquidity_level(zone):
-        return evaluate_liquidity_level(zone, snapshot, structure=structure)
-
     zone_timeframe = str(zone.get("timeframe") or "H1")
     zone_rates_map = {
+        "M15": rates_m15,
         "M30": rates_m30,
         "H1": rates_h1,
         "H4": rates_h4,

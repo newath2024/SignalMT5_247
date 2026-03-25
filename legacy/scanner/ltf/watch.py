@@ -70,7 +70,6 @@ def detect_watch_setup(snapshot, all_htf_zones, contexts):
                 snapshot["current_price"],
                 snapshot["point"],
                 timeframe_name,
-                snapshot["reference_levels"],
                 context,
             )
             if trigger is None:

@@ -26,17 +26,18 @@ MT5 Data Feed
 
 ### 1. Higher-Timeframe Context
 
-- Canonical strategy HTF is `H4 -> H1`; `M30` remains a legacy compatibility HTF input during migration.
-- Detect active liquidity levels from confirmed swing highs and swing lows.
-- Detect HTF imbalance zones using FVG and optional order block logic.
-- Mark directional bias only when a valid HTF sweep and a valid HTF MSS exist in the same directional sequence.
+- Canonical strategy HTF is structural-only: `M15 -> M30 -> H1 -> H4`.
+- Detect HTF imbalance zones using `FVG` and optional `Order Block` logic.
+- Remove previous day/week and session high-low anchors from the active strategy.
+- Mark directional bias from the strongest active structural HTF zone.
 
 ### 2. Lower-Timeframe Trigger Search
 
-- Evaluate LTF in this order: `M15 -> M5 -> M3`.
+- Derive confirmation timeframes dynamically from the active HTF.
+- Default confirmation policy uses the nearest lower 2 frames.
 - Search only inside an active HTF zone.
-- Require a valid LTF sweep, then a valid LTF MSS, then a valid trigger zone retest.
-- Trigger zones are limited to `FVG`, `IFVG`, and optional `Order Block`.
+- Require a valid LTF sweep, then a valid LTF MSS, then a valid strict `iFVG`.
+- Trigger zones are limited to strict `iFVG` confirmation aligned with the active HTF zone.
 
 ### 3. Signal Formation
 

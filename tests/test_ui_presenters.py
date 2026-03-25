@@ -46,8 +46,8 @@ class UiPresenterTests(unittest.TestCase):
                 "price": 158.914,
                 "last_update": "2026-03-25T17:18:00",
                 "detail": {
-                    "htf_context": "Sweep + reclaim PDH",
-                    "last_detected_sweep": "Primary sweep: PDH @ 159.202",
+                    "htf_context": "H1 bearish FVG",
+                    "last_detected_sweep": "Primary sweep: buy-side liquidity @ 159.202",
                 },
             }
         )

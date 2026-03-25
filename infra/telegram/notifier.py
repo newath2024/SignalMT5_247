@@ -58,10 +58,10 @@ class TelegramNotifier:
 
         text = "\n".join(
             [
-                f"[WATCH] {watch['symbol']} {watch['timeframe']} armed after liquidity sweep",
+                f"[WATCH] {watch['symbol']} {watch['timeframe']} armed after structural sweep",
                 f"Bias: {watch['bias']}",
                 f"HTF: {watch['htf_context']}",
-                f"Swept: {', '.join(watch.get('swept_liquidity', [])) or '-'}",
+                f"Sweep: {', '.join(watch.get('swept_liquidity', [])) or '-'}",
                 "Entry model: first edge of strict iFVG",
                 "SL model: origin candle extreme",
             ]

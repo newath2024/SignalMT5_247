@@ -4,9 +4,9 @@ Local desktop trading signal app for MT5. The trading and scanner behavior stays
 
 ## Strategy
 
-- HTF: `H1`, `H4`
-- HTF context: `OB`, `FVG`, `Previous Day High/Low`, `Previous Week High/Low`, session liquidity
-- LTF: `M3`, `M5`, `M15`
+- HTF candidates: `M15`, `M30`, `H1`, `H4`
+- HTF context: `OB`, `FVG`
+- LTF confirmation is derived dynamically from the active HTF
 - LTF confirmation: liquidity sweep + MSS + strict iFVG
 - Entry: first edge of iFVG
 - SL: high/low of the origin candle

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from domain.enums import AlertMode
+from domain.timeframes import sort_timeframes
 
 from .constants import APP_NAME, APP_TAGLINE, APP_VERSION, CONFIG_SCHEMA_VERSION, STRATEGY_NAME, STRATEGY_VERSION
 from .paths import DEFAULT_CONFIG_FILE, ENV_FILE, USER_CONFIG_FILE, ensure_runtime_layout
@@ -27,6 +28,8 @@ class ScannerConfig:
     canonical_htf_timeframes: list[str]
     legacy_htf_timeframes: list[str]
     ltf_timeframes: list[str]
+    confirmation_timeframes: list[str]
+    confirmation_limit: int
     loop_interval_sec: int
     ob_fvg_mode: str
     strict_ifvg: bool
@@ -92,8 +95,8 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
 
 def split_htf_timeframes(htf_timeframes: list[str]) -> tuple[list[str], list[str]]:
     """Separate canonical HTF inputs from legacy compatibility HTF inputs."""
-    canonical = [item for item in htf_timeframes if item in {"H1", "H4"}]
-    legacy = [item for item in htf_timeframes if item == "M30"]
+    canonical = [item for item in htf_timeframes if item in {"M15", "M30", "H1", "H4"}]
+    legacy: list[str] = []
     return canonical, legacy
 
 
@@ -124,8 +127,9 @@ def validate_config_payload(raw: dict[str, Any]) -> None:
     sl_model = str(scanner.get("sl_model", "origin_candle_extreme"))
     strict_ifvg = bool(scanner.get("strict_ifvg", True))
     ob_fvg_mode = str(scanner.get("ob_fvg_mode", "medium")).strip().lower()
-    htf_timeframes = [str(item) for item in scanner.get("htf_timeframes", ["M30", "H1", "H4"])]
-    ltf_timeframes = [str(item) for item in scanner.get("ltf_timeframes", ["M3", "M5", "M15"])]
+    htf_timeframes = [str(item) for item in scanner.get("htf_timeframes", ["M15", "M30", "H1", "H4"])]
+    ltf_timeframes = [str(item) for item in scanner.get("ltf_timeframes", ["M3", "M5", "M15", "H1"])]
+    confirmation_limit = int(scanner.get("confirmation_limit", 2))
 
     if symbol_aliases_raw is None:
         symbol_aliases_raw = {}
@@ -137,10 +141,12 @@ def validate_config_payload(raw: dict[str, Any]) -> None:
         raise ValueError("Only 'origin_candle_extreme' is supported for sl_model in the current strategy.")
     if not strict_ifvg:
         raise ValueError("The current production strategy requires strict_iFVG=true.")
-    if any(item not in {"M30", "H1", "H4"} for item in htf_timeframes):
-        raise ValueError("Only M30, H1, and H4 are supported for HTF scanning.")
-    if any(item not in {"M3", "M5", "M15"} for item in ltf_timeframes):
-        raise ValueError("Only M3, M5, and M15 are supported for LTF scanning.")
+    if any(item not in {"M15", "M30", "H1", "H4"} for item in htf_timeframes):
+        raise ValueError("Only M15, M30, H1, and H4 are supported for HTF scanning.")
+    if any(item not in {"M3", "M5", "M15", "H1"} for item in ltf_timeframes):
+        raise ValueError("Only M3, M5, M15, and H1 are supported for confirmation scanning.")
+    if confirmation_limit <= 0:
+        raise ValueError("scanner.confirmation_limit must be greater than zero.")
     if ob_fvg_mode not in {"strict", "medium"}:
         raise ValueError("Only 'strict' and 'medium' are supported for scanner.ob_fvg_mode.")
     if int(raw.get("schema_version", app.get("schema_version", CONFIG_SCHEMA_VERSION))) != CONFIG_SCHEMA_VERSION:
@@ -159,9 +165,11 @@ def normalize_app_config(raw: dict[str, Any]) -> AppConfig:
     telegram = raw.get("telegram", {})
     storage = raw.get("storage", {})
     symbol_aliases_raw = scanner.get("symbol_aliases", {}) or {}
-    htf_timeframes = [str(item) for item in scanner.get("htf_timeframes", ["M30", "H1", "H4"])]
+    htf_timeframes = sort_timeframes([str(item) for item in scanner.get("htf_timeframes", ["M15", "M30", "H1", "H4"])])
     canonical_htf_timeframes, legacy_htf_timeframes = split_htf_timeframes(htf_timeframes)
-
+    confirmation_timeframes = sort_timeframes(
+        [str(item) for item in scanner.get("ltf_timeframes", ["M3", "M5", "M15", "H1"])]
+    )
     return AppConfig(
         app=AppMeta(
             name=str(app.get("name", APP_NAME)),
@@ -177,7 +185,9 @@ def normalize_app_config(raw: dict[str, Any]) -> AppConfig:
             htf_timeframes=htf_timeframes,
             canonical_htf_timeframes=canonical_htf_timeframes,
             legacy_htf_timeframes=legacy_htf_timeframes,
-            ltf_timeframes=[str(item) for item in scanner.get("ltf_timeframes", ["M3", "M5", "M15"])],
+            ltf_timeframes=confirmation_timeframes,
+            confirmation_timeframes=confirmation_timeframes,
+            confirmation_limit=max(1, int(scanner.get("confirmation_limit", 2))),
             loop_interval_sec=max(5, int(scanner.get("loop_interval_sec", 60))),
             ob_fvg_mode=str(scanner.get("ob_fvg_mode", "medium")).strip().lower(),
             strict_ifvg=bool(scanner.get("strict_ifvg", True)),

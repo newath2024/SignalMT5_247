@@ -22,8 +22,6 @@ TIMEFRAME_MAP = {
     "M15": mt5.TIMEFRAME_M15,
     "M5": mt5.TIMEFRAME_M5,
     "M3": mt5.TIMEFRAME_M3,
-    "D1": mt5.TIMEFRAME_D1,
-    "W1": mt5.TIMEFRAME_W1,
 }
 
 HISTORY_BARS = {
@@ -33,26 +31,7 @@ HISTORY_BARS = {
     "M15": 180,
     "M5": 220,
     "M3": 260,
-    "D1": 15,
-    "W1": 15,
 }
 
 CHART_WINDOWS = {"H4": 70, "H1": 90, "M30": 85, "M15": 70, "M5": 90, "M3": 110}
-SESSION_DEFINITIONS = {
-    "asia": {
-        "label": "Asia",
-        "timezone": "Asia/Tokyo",
-        "start_hour_local": 8,
-        "end_hour_local": 16,
-        "high_label": "ASH",
-        "low_label": "ASL",
-    },
-    "london": {
-        "label": "London",
-        "timezone": "Europe/London",
-        "start_hour_local": 8,
-        "end_hour_local": 11,
-        "high_label": "LOH",
-        "low_label": "LOL",
-    },
-}
+SESSION_DEFINITIONS: dict[str, dict[str, object]] = {}
