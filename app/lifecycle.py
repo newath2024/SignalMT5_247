@@ -10,26 +10,33 @@ from dataclasses import replace
 from infra.config import AppConfig, build_startup_diagnostics, save_user_config_patch
 from legacy.bridges.runtime_config import get_ob_fvg_mode, normalize_ob_fvg_mode, set_ob_fvg_mode
 
-from .composition import AppRuntime, build_app_runtime
+from .composition import AppRuntime
 
 
 class AppLifecycle:
-    def __init__(self, config: AppConfig):
-        self.runtime: AppRuntime = build_app_runtime(config)
+    def __init__(self, config: AppConfig, runtime: AppRuntime):
         self.config = config
+        self.runtime: AppRuntime = runtime
+        self._started = False
+
+    def startup(self) -> None:
+        """Start long-lived lifecycle-managed services once."""
+        if self._started:
+            return
         self.runtime.scanner_service.start()
         self.runtime.telegram_bot.start()
-        diagnostics = build_startup_diagnostics(config)
+        diagnostics = build_startup_diagnostics(self.config)
         self.runtime.logger.info(
-            f"{config.app.name} v{config.app.version} started",
+            f"{self.config.app.name} v{self.config.app.version} started",
             phase="system",
-            reason=f"strategy v{config.app.strategy_version}",
+            reason=f"strategy v{self.config.app.strategy_version}",
         )
         self.runtime.logger.info(
             "Startup diagnostics",
             phase="system",
             reason=" | ".join(f"{key}={value}" for key, value in diagnostics.items()),
         )
+        self._started = True
 
     @staticmethod
     def normalize_ob_fvg_mode(mode: str | None) -> str:
@@ -55,6 +62,9 @@ class AppLifecycle:
         return get_ob_fvg_mode()
 
     def shutdown(self) -> None:
+        if not self._started:
+            return
         self.runtime.telegram_bot.stop()
         self.runtime.scanner_service.stop()
         self.runtime.engine.stop()
+        self._started = False

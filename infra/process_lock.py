@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 import os
+import subprocess
 from pathlib import Path
 
 
@@ -29,11 +30,32 @@ def _windows_process_creation_time(pid: int) -> int | None:
         ctypes.windll.kernel32.CloseHandle(handle)
 
 
+def _windows_pid_visible(pid: int) -> bool:
+    """Check whether a Windows PID is still visible in the active process table."""
+    if pid <= 0:
+        return False
+    try:
+        completed = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {int(pid)}", "/FO", "CSV", "/NH"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except Exception:
+        return False
+    output = (completed.stdout or "").strip()
+    if not output:
+        return False
+    if output.upper().startswith("INFO:"):
+        return False
+    return f'"{int(pid)}"' in output or f",{int(pid)}," in output
+
+
 def pid_exists(pid: int) -> bool:
     if pid <= 0:
         return False
     if os.name == "nt":
-        return _windows_process_creation_time(pid) is not None
+        return _windows_process_creation_time(pid) is not None and _windows_pid_visible(pid)
     try:
         os.kill(pid, 0)
     except OSError:
@@ -119,6 +141,8 @@ class ProcessFileLock:
         if os.name == "nt":
             live_created = _windows_process_creation_time(pid)
             if live_created is None:
+                return False
+            if not _windows_pid_visible(pid):
                 return False
             if recorded_created is None:
                 return True

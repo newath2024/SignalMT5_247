@@ -41,7 +41,7 @@ MT5 Data
 
 ### 1. Higher-Timeframe Context
 
-- Process HTF in fixed order: `W1 -> D1 -> H4 -> H1 -> M30`.
+- Canonical strategy HTF is `H4 -> H1`; `M30` remains a legacy compatibility HTF input during migration.
 - Detect confirmed swing highs and confirmed swing lows.
 - Detect valid HTF sweeps against confirmed liquidity.
 - Detect valid HTF MSS after the sweep.

@@ -26,7 +26,7 @@ MT5 Data Feed
 
 ### 1. Higher-Timeframe Context
 
-- Evaluate HTF in this order: `W1 -> D1 -> H4 -> H1 -> M30`.
+- Canonical strategy HTF is `H4 -> H1`; `M30` remains a legacy compatibility HTF input during migration.
 - Detect active liquidity levels from confirmed swing highs and swing lows.
 - Detect HTF imbalance zones using FVG and optional order block logic.
 - Mark directional bias only when a valid HTF sweep and a valid HTF MSS exist in the same directional sequence.

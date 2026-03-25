@@ -1,10 +1,15 @@
+"""Compatibility CLI/bootstrap wrapper.
+
+Canonical startup path lives in ``app.startup.build_application_controller``.
+"""
+
 import argparse
 import time
 
 from infra.config import DATA_DIR
 from infra.process_lock import ProcessFileLock
 
-from .controller import AppController
+from .startup import build_application_controller
 
 
 def parse_args(argv=None):
@@ -30,7 +35,7 @@ def main(argv=None):
     controller = None
     try:
         try:
-            controller = AppController()
+            controller = build_application_controller()
         except ValueError as exc:
             print(f"Configuration error: {exc}")
             return 2

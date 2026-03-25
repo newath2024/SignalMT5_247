@@ -5,6 +5,7 @@ Keep business rules in ``domain`` and infrastructure adapters in ``infra``.
 
 from .bootstrap import main
 from .controller import AppController
+from .startup import build_application_controller
 from infra.telegram.command_bot import TelegramCommandBot
 from services.runtime_state import RuntimeState
 from services.scanner_commands import ScannerCommandService
@@ -16,5 +17,6 @@ __all__ = [
     "ScannerCommandService",
     "SymbolRegistry",
     "TelegramCommandBot",
+    "build_application_controller",
     "main",
 ]

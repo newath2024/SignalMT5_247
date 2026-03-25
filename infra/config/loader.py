@@ -24,6 +24,8 @@ class ScannerConfig:
     symbols: list[str]
     symbol_aliases: dict[str, str]
     htf_timeframes: list[str]
+    canonical_htf_timeframes: list[str]
+    legacy_htf_timeframes: list[str]
     ltf_timeframes: list[str]
     loop_interval_sec: int
     ob_fvg_mode: str
@@ -88,6 +90,13 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return merged
 
 
+def split_htf_timeframes(htf_timeframes: list[str]) -> tuple[list[str], list[str]]:
+    """Separate canonical HTF inputs from legacy compatibility HTF inputs."""
+    canonical = [item for item in htf_timeframes if item in {"H1", "H4"}]
+    legacy = [item for item in htf_timeframes if item == "M30"]
+    return canonical, legacy
+
+
 def load_raw_app_config() -> dict[str, Any]:
     """Load merged config payload before validation and normalization."""
     ensure_runtime_layout()
@@ -150,6 +159,8 @@ def normalize_app_config(raw: dict[str, Any]) -> AppConfig:
     telegram = raw.get("telegram", {})
     storage = raw.get("storage", {})
     symbol_aliases_raw = scanner.get("symbol_aliases", {}) or {}
+    htf_timeframes = [str(item) for item in scanner.get("htf_timeframes", ["M30", "H1", "H4"])]
+    canonical_htf_timeframes, legacy_htf_timeframes = split_htf_timeframes(htf_timeframes)
 
     return AppConfig(
         app=AppMeta(
@@ -163,7 +174,9 @@ def normalize_app_config(raw: dict[str, Any]) -> AppConfig:
         scanner=ScannerConfig(
             symbols=[str(item).upper() for item in scanner.get("symbols", [])],
             symbol_aliases={str(key): str(value).upper() for key, value in symbol_aliases_raw.items()},
-            htf_timeframes=[str(item) for item in scanner.get("htf_timeframes", ["M30", "H1", "H4"])],
+            htf_timeframes=htf_timeframes,
+            canonical_htf_timeframes=canonical_htf_timeframes,
+            legacy_htf_timeframes=legacy_htf_timeframes,
             ltf_timeframes=[str(item) for item in scanner.get("ltf_timeframes", ["M3", "M5", "M15"])],
             loop_interval_sec=max(5, int(scanner.get("loop_interval_sec", 60))),
             ob_fvg_mode=str(scanner.get("ob_fvg_mode", "medium")).strip().lower(),

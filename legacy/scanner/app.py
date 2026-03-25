@@ -2,6 +2,9 @@ import argparse
 import time
 from pathlib import Path
 
+# Compatibility desktop/CLI bootstrap for the legacy package surface.
+# Canonical startup now lives in app.startup.build_application_controller.
+
 from .charting import build_signal_charts
 from .config import DEFAULT_POLL_INTERVAL_SEC, WATCHLIST
 from .data import build_symbol_snapshot, connect_mt5
@@ -267,9 +270,9 @@ def launch(args=None):
         main_loop(run_once=args.once, poll_interval_sec=args.interval)
         return 0
 
-    from app.controller import AppController
+    from app.startup import build_application_controller
     from ui import launch_desktop
 
-    controller = AppController()
+    controller = build_application_controller()
     controller.set_interval(args.interval)
     return launch_desktop(controller, auto_start=not args.no_autostart)

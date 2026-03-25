@@ -11,53 +11,25 @@ try:
         QCheckBox,
         QComboBox,
         QFileDialog,
-        QGridLayout,
-        QHBoxLayout,
-        QHeaderView,
         QLabel,
         QLineEdit,
         QMainWindow,
         QMessageBox,
-        QSplitter,
-        QTabWidget,
-        QVBoxLayout,
-        QWidget,
-        QTableWidgetItem,
     )
 
     from infra.config.constants import APP_NAME
     from infra.config.paths import BUNDLE_ROOT
-    from ui.presentation import (
-        format_price,
-        format_relative_age,
-        format_short_time,
-        format_symbol_focus,
-        format_timestamp,
-        format_zone,
-        format_htf_context_short,
-        get_priority_label,
-        get_state_label,
-        is_actionable_symbol,
-        is_recent,
-        sort_symbol_rows,
-    )
     from ui.presenters.symbol_presenter import (
-        alert_status_tone,
         build_inspector_model,
-        direction_tone,
         format_inspector_value,
         inspector_field_tone,
     )
+    from ui.presenters.table_presenter import fill_alert_table, fill_symbol_table, fill_watch_table
     from ui.theme import (
         FONT_FAMILY,
         FONT_SIZE,
-        SPACE_3,
-        SPACE_4,
-        SPACE_5,
         build_stylesheet,
         connection_tone,
-        priority_tone,
-        row_palette_for_state,
         scanner_status_palette,
         state_tone,
     )
@@ -67,14 +39,12 @@ try:
         render_activity_log,
         selected_payload_changed,
     )
+    from ui.views.main_window_layout import build_main_window_layout
     from ui.widgets import (
-        BADGE_ROLE,
         CommandBar,
         InspectorPanel,
         ModernTableWidget,
-        PanelCard,
         StatCard,
-        StatusBadge,
         TelemetryLogView,
         build_brand_icon,
     )
@@ -232,164 +202,7 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             QTimer.singleShot(200, self.start_scanner)
 
     def _build_ui(self) -> None:
-        root = QWidget()
-        root.setObjectName("AppRoot")
-        self.setCentralWidget(root)
-
-        outer = QVBoxLayout(root)
-        outer.setContentsMargins(SPACE_5, SPACE_5, SPACE_5, SPACE_5)
-        outer.setSpacing(SPACE_4)
-
-        outer.addWidget(self.command_bar)
-        outer.addLayout(self._build_metric_row())
-
-        content_splitter = QSplitter(Qt.Horizontal)
-        content_splitter.setChildrenCollapsible(False)
-        content_splitter.setHandleWidth(1)
-        content_splitter.addWidget(self._build_left_panel())
-        content_splitter.addWidget(self.inspector)
-        content_splitter.setStretchFactor(0, 7)
-        content_splitter.setStretchFactor(1, 3)
-        outer.addWidget(content_splitter, 1)
-
-    def _build_metric_row(self):
-        layout = QGridLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setHorizontalSpacing(SPACE_4)
-        layout.setVerticalSpacing(SPACE_4)
-        layout.addWidget(self.metric_cards["active_watches"], 0, 0)
-        layout.addWidget(self.metric_cards["confirmed_signals"], 0, 1)
-        layout.addWidget(self.metric_cards["coverage"], 0, 2)
-        layout.addWidget(self.metric_cards["loop_interval"], 0, 3)
-        for index in range(4):
-            layout.setColumnStretch(index, 1)
-        return layout
-
-    def _build_left_panel(self) -> QWidget:
-        container = QWidget()
-        container.setProperty("uiClass", "surface")
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        left_splitter = QSplitter(Qt.Vertical)
-        left_splitter.setChildrenCollapsible(False)
-        left_splitter.setHandleWidth(1)
-        left_splitter.addWidget(self._build_symbol_tab())
-        left_splitter.addWidget(self._build_secondary_panel())
-        left_splitter.setStretchFactor(0, 7)
-        left_splitter.setStretchFactor(1, 3)
-        layout.addWidget(left_splitter)
-        return container
-
-    def _build_secondary_panel(self) -> QWidget:
-        container = QWidget()
-        container.setProperty("uiClass", "surface")
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, SPACE_4, 0, 0)
-        layout.setSpacing(0)
-
-        tabs = QTabWidget()
-        tabs.addTab(self._build_watch_tab(), "Target Pipeline")
-        tabs.addTab(self._build_alert_tab(), "Alert Feed")
-        tabs.addTab(self._build_activity_tab(), "Telemetry")
-        layout.addWidget(tabs)
-        return container
-
-    def _build_panel_card(self, title: str, hint: str) -> tuple[PanelCard, QVBoxLayout]:
-        card = PanelCard(object_name="PanelCard")
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(SPACE_4, SPACE_4, SPACE_4, SPACE_4)
-        layout.setSpacing(SPACE_3)
-
-        title_label = QLabel(title)
-        title_label.setProperty("uiClass", "sectionTitle")
-        hint_label = QLabel(hint)
-        hint_label.setProperty("uiClass", "sectionHint")
-        hint_label.setWordWrap(True)
-        layout.addWidget(title_label)
-        layout.addWidget(hint_label)
-        return card, layout
-
-    def _build_symbol_tab(self) -> QWidget:
-        card, layout = self._build_panel_card(
-            "Market Radar",
-            "Scan every market first, then click a row to load the selected target context on the right.",
-        )
-        top_row = QHBoxLayout()
-        top_row.setSpacing(SPACE_3)
-        top_row.addWidget(self.actionable_only_checkbox)
-        top_row.addWidget(self.symbol_count_label)
-        top_row.addStretch(1)
-        top_row.addWidget(self._legend_badge("Setup Developing", "warning"))
-        top_row.addWidget(self._legend_badge("Awaiting Trigger", "warning"))
-        top_row.addWidget(self._legend_badge("Armed", "success"))
-        top_row.addWidget(self._legend_badge("No Valid Setup", "muted"))
-        layout.addLayout(top_row)
-
-        self.symbol_table.setHorizontalHeaderLabels(
-            ["Market", "State", "HTF Thesis", "Readiness", "TF", "Price", "Priority", "Updated"]
-        )
-        self._configure_table(self.symbol_table, stretch_column=3, badge_columns=(1, 6))
-        layout.addWidget(self.symbol_table, 1)
-        return card
-
-    def _build_watch_tab(self) -> QWidget:
-        card, layout = self._build_panel_card(
-            "Target Pipeline",
-            "Persistent targeting states for tracked markets and locked execution zones.",
-        )
-        self.watch_table.setHorizontalHeaderLabels(
-            ["Market", "TF", "Side", "HTF Thesis", "Sweep State", "Target State", "Tracking", "Zone", "Locked Since"]
-        )
-        self._configure_table(self.watch_table, stretch_column=3, badge_columns=(2, 5))
-        layout.addWidget(self.watch_table, 1)
-        return card
-
-    def _build_alert_tab(self) -> QWidget:
-        card, layout = self._build_panel_card(
-            "Alert Feed",
-            "Fresh alerts, routed executions, and blocked states from the live strategy runtime.",
-        )
-        self.alert_table.setHorizontalHeaderLabels(
-            ["Time", "Market", "TF", "Side", "Alert", "Reason", "Entry", "SL", "Status"]
-        )
-        self._configure_table(self.alert_table, stretch_column=5, badge_columns=(3, 8))
-        layout.addWidget(self.alert_table, 1)
-        return card
-
-    def _build_activity_tab(self) -> QWidget:
-        card, layout = self._build_panel_card(
-            "System Telemetry",
-            "Scanner telemetry, targeting decisions, warnings, and export-ready operator logs.",
-        )
-        filter_row = QHBoxLayout()
-        filter_row.setSpacing(SPACE_3)
-        filter_label = QLabel("Filter")
-        filter_label.setProperty("uiClass", "meta")
-        search_label = QLabel("Search")
-        search_label.setProperty("uiClass", "meta")
-        filter_row.addWidget(filter_label)
-        filter_row.addWidget(self.log_filter)
-        filter_row.addWidget(search_label)
-        filter_row.addWidget(self.log_symbol_filter, 1)
-        layout.addLayout(filter_row)
-        layout.addWidget(self.log_view, 1)
-        return card
-
-    def _legend_badge(self, text: str, tone: str) -> StatusBadge:
-        badge = StatusBadge(text)
-        badge.set_badge(text, tone=tone)
-        return badge
-
-    @staticmethod
-    def _configure_table(table: ModernTableWidget, stretch_column: int | None = None, badge_columns: tuple[int, ...] = ()) -> None:
-        header = table.horizontalHeader()
-        for index in range(table.columnCount()):
-            header.setSectionResizeMode(index, QHeaderView.ResizeToContents)
-        if stretch_column is not None:
-            header.setSectionResizeMode(stretch_column, QHeaderView.Stretch)
-        table.set_badge_columns(*badge_columns)
+        build_main_window_layout(self)
 
     def _wire_events(self) -> None:
         self.start_button.clicked.connect(self.start_scanner)
@@ -515,9 +328,9 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         for metric_key, card_model in build_metric_card_models(metrics, scanner).items():
             self.metric_cards[metric_key].set_value(card_model.value, card_model.hint)
 
-        self._fill_symbol_table(snapshot["symbols"])
-        self._fill_watch_table(snapshot["watches"])
-        self._fill_alert_table(snapshot["alerts"])
+        fill_symbol_table(self, snapshot["symbols"])
+        fill_watch_table(self, snapshot["watches"])
+        fill_alert_table(self, snapshot["alerts"])
         self.refresh_activity_log()
         if selected_payload_changed(previous_snapshot, snapshot, self._selected_symbol()):
             self.update_symbol_inspector()
@@ -570,150 +383,6 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.start_button.setToolTip(start_tooltip)
         self.stop_button.setToolTip(stop_tooltip)
 
-    def _fill_symbol_table(self, rows: list[dict]) -> None:
-        selected_symbol = self._active_symbol
-        display_rows = sort_symbol_rows(rows)
-        total_rows = len(display_rows)
-        if self.actionable_only_checkbox.isChecked():
-            display_rows = [item for item in display_rows if is_actionable_symbol(item)]
-        self._symbol_rows = display_rows
-        self.symbol_count_label.setText(f"Tracking {len(display_rows)}/{total_rows} markets")
-
-        vertical_scroll = self.symbol_table.verticalScrollBar().value()
-        horizontal_scroll = self.symbol_table.horizontalScrollBar().value()
-        signal_state = self.symbol_table.blockSignals(True)
-        self.symbol_table.setUpdatesEnabled(False)
-        try:
-            self._prepare_table_rows(self.symbol_table, len(display_rows))
-            top_symbols = {item.get("symbol") for item in display_rows[:3]}
-            for row_index, item in enumerate(display_rows):
-                state = item.get("state", "idle")
-                priority = get_priority_label(item)
-                values = [
-                    item.get("symbol", "-"),
-                    get_state_label(state),
-                    format_htf_context_short(item),
-                    format_symbol_focus(item),
-                    item.get("tf", "-"),
-                    format_price(item.get("price")),
-                    priority,
-                    format_relative_age(item.get("last_update")),
-                ]
-                row_payloads = []
-                for column_index, value in enumerate(values):
-                    badge_payload = None
-                    if column_index == 1:
-                        badge_payload = {"text": str(value), "tone": state_tone(state)}
-                    elif column_index == 6:
-                        badge_payload = {"text": str(value), "tone": priority_tone(priority)}
-                    row_payloads.append(
-                        {
-                            "text": str(value),
-                            "alignment": Qt.AlignCenter if column_index in {1, 4, 5, 6, 7} else None,
-                            "user_role": item,
-                            "badge": badge_payload,
-                        }
-                    )
-                self._sync_table_row(self.symbol_table, row_index, row_payloads)
-
-                self._paint_row(self.symbol_table, row_index, state)
-                self._emphasize_row(
-                    self.symbol_table,
-                    row_index,
-                    priority,
-                    item,
-                    rank=row_index,
-                    top_symbols=top_symbols,
-                )
-        finally:
-            self.symbol_table.setUpdatesEnabled(True)
-            self.symbol_table.blockSignals(signal_state)
-            self.symbol_table.verticalScrollBar().setValue(vertical_scroll)
-            self.symbol_table.horizontalScrollBar().setValue(horizontal_scroll)
-
-        self._restore_symbol_selection(display_rows, selected_symbol)
-
-    def _fill_watch_table(self, rows: list[dict]) -> None:
-        vertical_scroll = self.watch_table.verticalScrollBar().value()
-        signal_state = self.watch_table.blockSignals(True)
-        self.watch_table.setUpdatesEnabled(False)
-        try:
-            self._prepare_table_rows(self.watch_table, len(rows))
-            for row_index, item in enumerate(rows):
-                direction = (
-                    item.get("direction")
-                    or ("LONG" if item.get("bias") == "Long" else "SHORT" if item.get("bias") == "Short" else "-")
-                )
-                values = [
-                    item.get("symbol", "-"),
-                    item.get("timeframe", "-"),
-                    direction,
-                    format_htf_context_short({"htf_context": item.get("htf_context"), "detail": {}}),
-                    item.get("ltf_sweep_status", "-"),
-                    get_state_label(item.get("status")),
-                    item.get("waiting_for", "-"),
-                    format_zone(item.get("zone_top"), item.get("zone_bottom")),
-                    format_short_time(item.get("armed_at")),
-                ]
-                row_payloads = []
-                for column_index, value in enumerate(values):
-                    badge_payload = None
-                    if column_index == 2:
-                        badge_payload = {"text": str(value), "tone": direction_tone(direction)}
-                    elif column_index == 5:
-                        badge_payload = {"text": str(value), "tone": state_tone(item.get("status"))}
-                    row_payloads.append(
-                        {
-                            "text": str(value),
-                            "alignment": Qt.AlignCenter if column_index in {1, 2, 5, 8} else None,
-                            "badge": badge_payload,
-                        }
-                    )
-                self._sync_table_row(self.watch_table, row_index, row_payloads)
-                self._paint_row(self.watch_table, row_index, item.get("status", "idle"))
-        finally:
-            self.watch_table.setUpdatesEnabled(True)
-            self.watch_table.blockSignals(signal_state)
-            self.watch_table.verticalScrollBar().setValue(vertical_scroll)
-
-    def _fill_alert_table(self, rows: list[dict]) -> None:
-        vertical_scroll = self.alert_table.verticalScrollBar().value()
-        signal_state = self.alert_table.blockSignals(True)
-        self.alert_table.setUpdatesEnabled(False)
-        try:
-            self._prepare_table_rows(self.alert_table, len(rows))
-            for row_index, item in enumerate(rows):
-                values = [
-                    format_timestamp(item.get("time")),
-                    item.get("symbol", "-"),
-                    item.get("tf", "-"),
-                    item.get("direction", "-"),
-                    item.get("alert_type", "-"),
-                    item.get("reason", "-"),
-                    format_price(item.get("entry")),
-                    format_price(item.get("sl")),
-                    item.get("status", "-"),
-                ]
-                row_payloads = []
-                for column_index, value in enumerate(values):
-                    badge_payload = None
-                    if column_index == 3:
-                        badge_payload = {"text": str(value), "tone": direction_tone(str(value))}
-                    elif column_index == 8:
-                        badge_payload = {"text": str(value), "tone": alert_status_tone(item)}
-                    row_payloads.append({"text": str(value), "badge": badge_payload})
-                self._sync_table_row(self.alert_table, row_index, row_payloads)
-                alert_state = (
-                    "confirmed"
-                    if item.get("status") == "sent"
-                    else "rejected" if "blocked" in str(item.get("status")) else "idle"
-                )
-                self._paint_row(self.alert_table, row_index, alert_state, tint_only=True)
-        finally:
-            self.alert_table.setUpdatesEnabled(True)
-            self.alert_table.blockSignals(signal_state)
-            self.alert_table.verticalScrollBar().setValue(vertical_scroll)
-
     def refresh_activity_log(self) -> None:
         if not self._last_snapshot:
             return
@@ -762,100 +431,11 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
             monospace = key in {"timeline", "rejection_debug", "zone_top_bottom", "last_alert_time"}
             field.set_value(str(value or "--"), tone=tone, monospace=monospace)
 
-    def _restore_symbol_selection(self, display_rows: list[dict], selected_symbol: str | None) -> None:
-        if not selected_symbol:
-            self.symbol_table.clearSelection()
-            self._active_symbol = None
-            return
-        for row_index, item in enumerate(display_rows):
-            if item.get("symbol") == selected_symbol:
-                self.symbol_table.selectRow(row_index)
-                self._active_symbol = selected_symbol
-                return
-        self.symbol_table.clearSelection()
-        self._active_symbol = None
-
     def _refresh_symbol_table_view(self) -> None:
         if not self._last_snapshot:
             return
-        self._fill_symbol_table(self._last_snapshot.get("symbols") or [])
+        fill_symbol_table(self, self._last_snapshot.get("symbols") or [])
         self.update_symbol_inspector()
-
-    @staticmethod
-    def _prepare_table_rows(table: ModernTableWidget, row_count: int) -> None:
-        if table.rowCount() != row_count:
-            table.setRowCount(row_count)
-
-    @staticmethod
-    def _sync_table_row(table: ModernTableWidget, row_index: int, payloads: list[dict]) -> None:
-        for column_index, payload in enumerate(payloads):
-            current_item = table.item(row_index, column_index)
-            if current_item is None:
-                current_item = QTableWidgetItem()
-                table.setItem(row_index, column_index, current_item)
-            text = str(payload.get("text", ""))
-            if current_item.text() != text:
-                current_item.setText(text)
-            alignment = payload.get("alignment")
-            if alignment is not None and current_item.textAlignment() != alignment:
-                current_item.setTextAlignment(alignment)
-            user_role = payload.get("user_role")
-            if user_role is not None:
-                current_item.setData(Qt.UserRole, user_role)
-            badge_payload = payload.get("badge")
-            current_badge = current_item.data(BADGE_ROLE)
-            if badge_payload:
-                if current_badge != badge_payload:
-                    current_item.setData(BADGE_ROLE, badge_payload)
-            elif current_badge is not None:
-                current_item.setData(BADGE_ROLE, None)
-
-    def _paint_row(self, table: ModernTableWidget, row_index: int, state: str, tint_only: bool = False) -> None:
-        palette = row_palette_for_state(state)
-        for column_index in range(table.columnCount()):
-            item = table.item(row_index, column_index)
-            if item is None:
-                continue
-            if not tint_only or column_index in {0, 1, table.columnCount() - 1}:
-                item.setBackground(palette["background"])
-            item.setForeground(palette["foreground"])
-
-    def _emphasize_row(
-        self,
-        table: ModernTableWidget,
-        row_index: int,
-        priority: str,
-        item: dict,
-        *,
-        rank: int,
-        top_symbols: set[str],
-    ) -> None:
-        if priority == "High":
-            font = QFont(FONT_FAMILY, FONT_SIZE)
-            font.setBold(True)
-            for column_index in range(table.columnCount()):
-                current_item = table.item(row_index, column_index)
-                if current_item is not None:
-                    current_item.setFont(font)
-
-        if item.get("symbol") in top_symbols and priority in {"High", "Medium"}:
-            lead_font = QFont(FONT_FAMILY, FONT_SIZE)
-            lead_font.setBold(True)
-            if rank == 0:
-                lead_font.setPointSize(FONT_SIZE + 1)
-            for column_index in {0, 1, 3}:
-                current_item = table.item(row_index, column_index)
-                if current_item is not None:
-                    current_item.setFont(lead_font)
-
-        if is_recent(item.get("last_alert_time")) and item.get("state") in {"confirmed", "cooldown"}:
-            accent_font = QFont(FONT_FAMILY, FONT_SIZE)
-            accent_font.setBold(True)
-            accent_font.setUnderline(True)
-            for column_index in {0, 1}:
-                current_item = table.item(row_index, column_index)
-                if current_item is not None:
-                    current_item.setFont(accent_font)
 
 def launch_desktop(controller, auto_start: bool = True):
     if _PYSIDE_IMPORT_ERROR is not None:
