@@ -1,96 +1,47 @@
-from dataclasses import replace
+"""UI-facing application facade.
 
-from app.runtime import ScannerEngine
-from domain.strategy import StrategyEngine
-from infra.config import load_app_config, save_user_config_patch
-from infra.logging import StructuredLogger
-from infra.mt5.gateway import MT5DataGateway
-from infra.storage import SQLiteStore, StateManager
-from infra.telegram import TelegramCommandBot, TelegramNotifier
-from legacy.bridges.runtime_config import get_ob_fvg_mode, normalize_ob_fvg_mode, set_ob_fvg_mode
-from services import AlertService, ScanService
-from services.runtime_state import RuntimeState
-from services.scanner_commands import ScannerCommandService
-from services.symbol_registry import SymbolRegistry
+Composition and lifecycle live in ``app.composition`` and ``app.lifecycle``.
+"""
+
+from infra.config import load_app_config
+
+from .lifecycle import AppLifecycle
 
 
 class AppController:
     def __init__(self):
         self.config = load_app_config()
-        self._apply_ob_fvg_mode(self.config.scanner.ob_fvg_mode)
-        self.logger = StructuredLogger()
-        self.sqlite = SQLiteStore()
-        self.state_manager = StateManager(self.sqlite)
-        self.data_gateway = MT5DataGateway(self.logger)
-        self.symbol_registry = SymbolRegistry(self.config.scanner.symbols, self.config.scanner.symbol_aliases)
-        self.runtime_state = RuntimeState(self.symbol_registry.get_all_symbols())
-        self.notifier = TelegramNotifier(self.config.telegram, self.logger)
-        self.strategy = StrategyEngine(trigger_timeframes=self.config.scanner.ltf_timeframes)
-        self.alert_service = AlertService(self.config, self.state_manager, self.notifier, self.logger)
-        self.scan_service = ScanService(
-            data_gateway=self.data_gateway,
-            strategy_engine=self.strategy,
-            state_manager=self.state_manager,
-            alert_service=self.alert_service,
-            logger=self.logger,
-        )
-        self.engine = ScannerEngine(
-            config=self.config,
-            data_gateway=self.data_gateway,
-            notifier=self.notifier,
-            state_manager=self.state_manager,
-            scan_service=self.scan_service,
-            logger=self.logger,
-            runtime_state=self.runtime_state,
-        )
-        self.scanner_service = ScannerCommandService(
-            engine=self.engine,
-            symbol_registry=self.symbol_registry,
-            runtime_state=self.runtime_state,
-            logger=self.logger,
-        )
-        self.telegram_bot = TelegramCommandBot(
-            config=self.config.telegram,
-            notifier=self.notifier,
-            symbol_registry=self.symbol_registry,
-            scanner_service=self.scanner_service,
-            logger=self.logger,
-        )
-        self.scanner_service.start()
-        self.telegram_bot.start()
-        self.logger.info(
-            f"{self.config.app.name} v{self.config.app.version} started",
-            phase="system",
-            reason=f"strategy v{self.config.app.strategy_version}",
-        )
+        self.lifecycle = AppLifecycle(self.config)
+        self._sync_runtime_handles()
 
     @staticmethod
     def _normalize_ob_fvg_mode(mode: str | None) -> str:
-        return normalize_ob_fvg_mode(mode)
-
-    def _apply_ob_fvg_mode(self, mode: str) -> str:
-        return set_ob_fvg_mode(mode)
+        return AppLifecycle.normalize_ob_fvg_mode(mode)
 
     def current_ob_fvg_mode(self) -> str:
-        return get_ob_fvg_mode()
+        return self.lifecycle.current_ob_fvg_mode()
+
+    def _sync_runtime_handles(self) -> None:
+        runtime = self.lifecycle.runtime
+        self.config = self.lifecycle.config
+        self.logger = runtime.logger
+        self.sqlite = runtime.sqlite
+        self.state_manager = runtime.state_manager
+        self.data_gateway = runtime.data_gateway
+        self.symbol_registry = runtime.symbol_registry
+        self.runtime_state = runtime.runtime_state
+        self.notifier = runtime.notifier
+        self.strategy = runtime.strategy
+        self.alert_service = runtime.alert_service
+        self.scan_service = runtime.scan_service
+        self.engine = runtime.engine
+        self.scanner_service = runtime.scanner_service
+        self.telegram_bot = runtime.telegram_bot
 
     def set_ob_fvg_mode(self, mode: str, persist: bool = True):
-        try:
-            normalized = self._apply_ob_fvg_mode(mode)
-        except ValueError as exc:
-            return False, str(exc)
-        self.config = replace(
-            self.config,
-            scanner=replace(self.config.scanner, ob_fvg_mode=normalized),
-        )
-        if persist:
-            save_user_config_patch({"scanner": {"ob_fvg_mode": normalized}})
-        self.logger.info(
-            "HTF OB FVG mode updated",
-            phase="system",
-            reason=f"mode={normalized}",
-        )
-        return True, f"HTF OB FVG mode set to {normalized}."
+        ok, message = self.lifecycle.set_ob_fvg_mode(mode, persist=persist)
+        self._sync_runtime_handles()
+        return ok, message
 
     def start(self, interval_sec: int | None = None):
         if interval_sec is not None:
@@ -116,9 +67,7 @@ class AppController:
         self.logger.clear_recent_history()
 
     def shutdown(self):
-        self.telegram_bot.stop()
-        self.scanner_service.stop()
-        self.engine.stop()
+        self.lifecycle.shutdown()
 
     def snapshot(self):
         snapshot = self.engine.snapshot()

@@ -17,7 +17,11 @@ def parse_args(argv=None):
 
 
 def main(argv=None):
-    args = parse_args(argv)
+    try:
+        args = parse_args(argv)
+    except ValueError as exc:
+        print(f"Configuration error: {exc}")
+        return 2
     instance_lock = ProcessFileLock(DATA_DIR / "app_instance.lock")
     if not instance_lock.acquire():
         print("Liquidity Sniper is already running. Close the existing instance first.")
@@ -25,7 +29,11 @@ def main(argv=None):
 
     controller = None
     try:
-        controller = AppController()
+        try:
+            controller = AppController()
+        except ValueError as exc:
+            print(f"Configuration error: {exc}")
+            return 2
         if args.interval:
             controller.set_interval(args.interval)
 

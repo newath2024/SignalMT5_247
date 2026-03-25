@@ -88,19 +88,36 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
     return merged
 
 
-def _normalize_config(raw: dict[str, Any]) -> AppConfig:
+def load_raw_app_config() -> dict[str, Any]:
+    """Load merged config payload before validation and normalization."""
+    ensure_runtime_layout()
+
+    default_payload = _load_json_file(DEFAULT_CONFIG_FILE)
+    user_payload = _load_json_file(USER_CONFIG_FILE)
+    env_payload = _load_env_file(ENV_FILE)
+
+    merged = _deep_merge(default_payload, user_payload)
+    telegram_payload = dict(merged.get("telegram", {}))
+    if env_payload.get("TELEGRAM_BOT_TOKEN"):
+        telegram_payload["bot_token"] = env_payload["TELEGRAM_BOT_TOKEN"]
+    if env_payload.get("TELEGRAM_CHAT_ID"):
+        telegram_payload["chat_id"] = env_payload["TELEGRAM_CHAT_ID"]
+    merged["telegram"] = telegram_payload
+    return merged
+
+
+def validate_config_payload(raw: dict[str, Any]) -> None:
+    """Validate config semantics before constructing typed runtime config."""
     app = raw.get("app", {})
     scanner = raw.get("scanner", {})
-    telegram = raw.get("telegram", {})
-    storage = raw.get("storage", {})
-
+    symbol_aliases_raw = scanner.get("symbol_aliases", {})
     entry_model = str(scanner.get("entry_model", "ifvg_first_edge"))
     sl_model = str(scanner.get("sl_model", "origin_candle_extreme"))
     strict_ifvg = bool(scanner.get("strict_ifvg", True))
     ob_fvg_mode = str(scanner.get("ob_fvg_mode", "medium")).strip().lower()
-    symbol_aliases_raw = scanner.get("symbol_aliases", {})
     htf_timeframes = [str(item) for item in scanner.get("htf_timeframes", ["M30", "H1", "H4"])]
     ltf_timeframes = [str(item) for item in scanner.get("ltf_timeframes", ["M3", "M5", "M15"])]
+
     if symbol_aliases_raw is None:
         symbol_aliases_raw = {}
     if not isinstance(symbol_aliases_raw, dict):
@@ -117,6 +134,22 @@ def _normalize_config(raw: dict[str, Any]) -> AppConfig:
         raise ValueError("Only M3, M5, and M15 are supported for LTF scanning.")
     if ob_fvg_mode not in {"strict", "medium"}:
         raise ValueError("Only 'strict' and 'medium' are supported for scanner.ob_fvg_mode.")
+    if int(raw.get("schema_version", app.get("schema_version", CONFIG_SCHEMA_VERSION))) != CONFIG_SCHEMA_VERSION:
+        raise ValueError(
+            f"Unsupported config schema version: {raw.get('schema_version', app.get('schema_version'))}. "
+            f"Expected {CONFIG_SCHEMA_VERSION}."
+        )
+
+
+def normalize_app_config(raw: dict[str, Any]) -> AppConfig:
+    """Normalize validated config into typed runtime settings."""
+    validate_config_payload(raw)
+
+    app = raw.get("app", {})
+    scanner = raw.get("scanner", {})
+    telegram = raw.get("telegram", {})
+    storage = raw.get("storage", {})
+    symbol_aliases_raw = scanner.get("symbol_aliases", {}) or {}
 
     return AppConfig(
         app=AppMeta(
@@ -130,13 +163,13 @@ def _normalize_config(raw: dict[str, Any]) -> AppConfig:
         scanner=ScannerConfig(
             symbols=[str(item).upper() for item in scanner.get("symbols", [])],
             symbol_aliases={str(key): str(value).upper() for key, value in symbol_aliases_raw.items()},
-            htf_timeframes=htf_timeframes,
-            ltf_timeframes=ltf_timeframes,
+            htf_timeframes=[str(item) for item in scanner.get("htf_timeframes", ["M30", "H1", "H4"])],
+            ltf_timeframes=[str(item) for item in scanner.get("ltf_timeframes", ["M3", "M5", "M15"])],
             loop_interval_sec=max(5, int(scanner.get("loop_interval_sec", 60))),
-            ob_fvg_mode=ob_fvg_mode,
-            strict_ifvg=strict_ifvg,
-            entry_model=entry_model,
-            sl_model=sl_model,
+            ob_fvg_mode=str(scanner.get("ob_fvg_mode", "medium")).strip().lower(),
+            strict_ifvg=bool(scanner.get("strict_ifvg", True)),
+            entry_model=str(scanner.get("entry_model", "ifvg_first_edge")),
+            sl_model=str(scanner.get("sl_model", "origin_candle_extreme")),
             alert_mode=AlertMode(str(scanner.get("alert_mode", AlertMode.BOTH.value))),
             cooldown_sec=max(0, int(scanner.get("cooldown_sec", 1800))),
         ),
@@ -153,27 +186,8 @@ def _normalize_config(raw: dict[str, Any]) -> AppConfig:
 
 
 def load_app_config() -> AppConfig:
-    ensure_runtime_layout()
-
-    default_payload = _load_json_file(DEFAULT_CONFIG_FILE)
-    user_payload = _load_json_file(USER_CONFIG_FILE)
-    env_payload = _load_env_file(ENV_FILE)
-
-    merged = _deep_merge(default_payload, user_payload)
-    telegram_payload = dict(merged.get("telegram", {}))
-    if env_payload.get("TELEGRAM_BOT_TOKEN"):
-        telegram_payload["bot_token"] = env_payload["TELEGRAM_BOT_TOKEN"]
-    if env_payload.get("TELEGRAM_CHAT_ID"):
-        telegram_payload["chat_id"] = env_payload["TELEGRAM_CHAT_ID"]
-    merged["telegram"] = telegram_payload
-
-    config = _normalize_config(merged)
-    if config.app.schema_version != CONFIG_SCHEMA_VERSION:
-        raise ValueError(
-            f"Unsupported config schema version: {config.app.schema_version}. "
-            f"Expected {CONFIG_SCHEMA_VERSION}."
-        )
-    return config
+    """Load, validate, and normalize the runtime config."""
+    return normalize_app_config(load_raw_app_config())
 
 
 def save_user_config_patch(patch: dict[str, Any]) -> dict[str, Any]:

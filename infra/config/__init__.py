@@ -1,5 +1,6 @@
 from .constants import APP_NAME, APP_TAGLINE, APP_VERSION, CONFIG_SCHEMA_VERSION, STRATEGY_NAME, STRATEGY_VERSION
-from .loader import AppConfig, load_app_config, save_user_config_patch
+from .diagnostics import build_startup_diagnostics
+from .loader import AppConfig, load_app_config, load_raw_app_config, normalize_app_config, save_user_config_patch, validate_config_payload
 from .paths import (
     APP_HOME,
     BUNDLE_ROOT,
@@ -26,6 +27,7 @@ __all__ = [
     "APP_VERSION",
     "AppConfig",
     "BUNDLE_ROOT",
+    "build_startup_diagnostics",
     "CONFIG_SCHEMA_VERSION",
     "DATA_DIR",
     "DATABASE_FILE",
@@ -44,5 +46,8 @@ __all__ = [
     "legacy_env_candidates",
     "legacy_watch_cache_candidates",
     "load_app_config",
+    "load_raw_app_config",
+    "normalize_app_config",
     "save_user_config_patch",
+    "validate_config_payload",
 ]

@@ -1,12 +1,14 @@
 import MetaTrader5 as mt5
 
+from infra.mt5.cache import OhlcSnapshotCache
 from legacy.bridges.market_data import build_symbol_snapshot
 from .runtime import check_mt5_session, connect_mt5_with_retry, load_mt5_runtime_settings
 
 
 class MT5DataGateway:
-    def __init__(self, logger):
+    def __init__(self, logger, snapshot_cache: OhlcSnapshotCache | None = None):
         self.logger = logger
+        self.snapshot_cache = snapshot_cache or OhlcSnapshotCache()
         self._connected = False
         self._terminal_name = "Disconnected"
         self._last_error = None
@@ -68,11 +70,15 @@ class MT5DataGateway:
     def fetch_symbol_snapshot(self, symbol: str):
         if not self.ensure_connected(probe_symbol=symbol):
             return None
+        cached_snapshot = self.snapshot_cache.get(symbol)
+        if cached_snapshot is not None:
+            return cached_snapshot
         attempts = 2
         for attempt in range(1, attempts + 1):
             try:
                 snapshot = build_symbol_snapshot(symbol)
                 if snapshot is not None:
+                    snapshot = self.snapshot_cache.put(symbol, snapshot)
                     self._last_error = None
                     self._session_state = "ready"
                     self._connected = True

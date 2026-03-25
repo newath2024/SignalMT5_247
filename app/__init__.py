@@ -1,4 +1,7 @@
-"""Application-layer entry points and runtime coordination exports."""
+"""Application-layer entry points and runtime coordination exports.
+
+Keep business rules in ``domain`` and infrastructure adapters in ``infra``.
+"""
 
 from .bootstrap import main
 from .controller import AppController

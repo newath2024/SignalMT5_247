@@ -1,3 +1,10 @@
+"""Compatibility import bridge for legacy ``scanner.*`` paths.
+
+Canonical implementations now live under ``app`` / ``domain`` / ``infra`` /
+``services`` while unresolved legacy imports continue to resolve through the
+``legacy.scanner`` package during migration.
+"""
+
 from pathlib import Path
 
 _package_dir = Path(__file__).resolve().parent

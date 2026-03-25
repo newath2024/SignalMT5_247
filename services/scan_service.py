@@ -3,6 +3,7 @@ import time
 
 from domain.enums import SetupPhase, SetupState
 from domain.models import SymbolStateModel
+from domain.strategy.pipeline import phase_for_watch_status
 from domain.strategy.reasoning import describe_error, format_score, format_timeline_lines
 
 
@@ -230,8 +231,29 @@ class ScanService:
             dedupe_key=f"{transition}:{payload.get('last_update')}",
         )
 
+    def _fetch_snapshot(self, symbol: str):
+        """Fetch the latest MT5 snapshot via the gateway/cache boundary."""
+        return self.data_gateway.fetch_symbol_snapshot(symbol)
+
+    def _load_active_watches(self, symbol: str) -> list[dict]:
+        return self.state_manager.list_active_watches(
+            symbol=symbol,
+            statuses=(
+                "armed",
+                "sweep_detected",
+                "waiting_mss",
+                "awaiting_ifvg",
+                "triggered",
+                "confirmed",
+                "cooldown",
+            ),
+        )
+
+    def _evaluate_snapshot(self, snapshot: dict, active_watches: list[dict]):
+        return self.strategy_engine.evaluate_symbol(snapshot, active_watches)
+
     def scan_symbol(self, symbol: str) -> dict:
-        snapshot = self.data_gateway.fetch_symbol_snapshot(symbol)
+        snapshot = self._fetch_snapshot(symbol)
         if snapshot is None:
             error_reason = describe_error(self.data_gateway.status_snapshot().get("last_error") or "MT5 rates unavailable")
             self.logger.error(
@@ -284,19 +306,8 @@ class ScanService:
             self._log_state_transition(stored)
             return stored
 
-        active_watches = self.state_manager.list_active_watches(
-            symbol=symbol,
-            statuses=(
-                "armed",
-                "sweep_detected",
-                "waiting_mss",
-                "awaiting_ifvg",
-                "triggered",
-                "confirmed",
-                "cooldown",
-            ),
-        )
-        decision = self.strategy_engine.evaluate_symbol(snapshot, active_watches)
+        active_watches = self._load_active_watches(symbol)
+        decision = self._evaluate_snapshot(snapshot, active_watches)
         self._record_context_event(symbol, decision)
 
         for removed in decision.removed_watches:
@@ -340,7 +351,7 @@ class ScanService:
                 "narrative watch updated",
                 symbol=watch["symbol"],
                 timeframe=watch["timeframe"],
-                phase=self.strategy_engine._phase_for_watch_status(watch.get("status")),
+                phase=phase_for_watch_status(watch.get("status")),
                 reason=watch.get("status_reason") or "narrative updated",
             )
             if watch.get("status") == SetupState.ARMED.value:
