@@ -35,7 +35,7 @@ def main(argv=None):
     controller = None
     try:
         try:
-            controller = build_application_controller()
+            controller = build_application_controller(start_lifecycle=not args.once)
         except ValueError as exc:
             print(f"Configuration error: {exc}")
             return 2

@@ -55,6 +55,32 @@ class BootstrapPathTests(unittest.TestCase):
         lifecycle.startup.assert_called_once_with()
         controller_cls_mock.assert_called_once_with(lifecycle)
 
+    @patch("app.startup.AppController")
+    @patch("app.startup.AppLifecycle")
+    @patch("app.startup.build_app_runtime")
+    @patch("app.startup.load_app_config")
+    def test_build_application_controller_can_skip_lifecycle_startup(
+        self,
+        load_app_config_mock,
+        build_app_runtime_mock,
+        lifecycle_cls_mock,
+        controller_cls_mock,
+    ):
+        config = object()
+        runtime = object()
+        lifecycle = MagicMock()
+        load_app_config_mock.return_value = config
+        build_app_runtime_mock.return_value = runtime
+        lifecycle_cls_mock.return_value = lifecycle
+
+        build_application_controller(start_lifecycle=False)
+
+        load_app_config_mock.assert_called_once_with()
+        build_app_runtime_mock.assert_called_once_with(config)
+        lifecycle_cls_mock.assert_called_once_with(config=config, runtime=runtime)
+        lifecycle.startup.assert_not_called()
+        controller_cls_mock.assert_called_once_with(lifecycle)
+
     def test_app_controller_is_injected_facade(self):
         lifecycle = FakeLifecycle()
 

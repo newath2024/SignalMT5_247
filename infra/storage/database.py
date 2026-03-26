@@ -12,6 +12,7 @@ class SQLiteStore:
         self.database_file.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._connection = sqlite3.connect(self.database_file, check_same_thread=False)
+        self._closed = False
         self._connection.row_factory = sqlite3.Row
         self._initialize_schema()
 
@@ -45,4 +46,7 @@ class SQLiteStore:
 
     def close(self):
         with self._lock:
+            if self._closed:
+                return
             self._connection.close()
+            self._closed = True

@@ -1,3 +1,4 @@
+from copy import deepcopy
 import threading
 import time
 import os
@@ -213,7 +214,7 @@ class ScannerEngine:
 
     def _store_symbol_result(self, result: dict):
         with self._lock:
-            self._symbol_states[result["symbol"]] = dict(result)
+            self._symbol_states[result["symbol"]] = deepcopy(result)
         if self.runtime_state is not None:
             self.runtime_state.update_symbol_state(result)
 
@@ -406,7 +407,7 @@ class ScannerEngine:
                 "next_scan_at": next_scan_at,
                 "progress": progress,
             }
-            symbols = [dict(self._symbol_states[symbol]) for symbol in self.config.scanner.symbols]
+            symbols = [deepcopy(self._symbol_states[symbol]) for symbol in self.config.scanner.symbols]
 
         watches = self.state_manager.list_active_watches(statuses=("armed", "waiting_mss"))
         alerts = self.state_manager.recent_alerts(limit=50)

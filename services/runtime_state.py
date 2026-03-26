@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import threading
 import time
 import uuid
@@ -38,24 +39,24 @@ class RuntimeState:
             for state in states:
                 symbol = str(state.get("symbol") or "").upper()
                 if symbol:
-                    self._symbol_states[symbol] = dict(state)
+                    self._symbol_states[symbol] = deepcopy(state)
 
     def update_symbol_state(self, payload: dict):
         symbol = str(payload.get("symbol") or "").upper()
         if not symbol:
             return
         with self._lock:
-            self._symbol_states[symbol] = dict(payload)
+            self._symbol_states[symbol] = deepcopy(payload)
 
     def get_symbol_state(self, symbol: str) -> dict | None:
         with self._lock:
             payload = self._symbol_states.get(symbol)
-            return dict(payload) if payload else None
+            return deepcopy(payload) if payload else None
 
     def list_symbol_states(self, symbols: list[str] | None = None) -> list[dict]:
         with self._lock:
             ordered = symbols or list(self._symbol_states.keys())
-            return [dict(self._symbol_states[symbol]) for symbol in ordered if self._symbol_states.get(symbol)]
+            return [deepcopy(self._symbol_states[symbol]) for symbol in ordered if self._symbol_states.get(symbol)]
 
     def queue_job(self, kind: str, requested_by: str, symbol: str | None = None, metadata: dict | None = None) -> dict | None:
         with self._lock:

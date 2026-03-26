@@ -17,10 +17,11 @@ from .controller import AppController
 from .lifecycle import AppLifecycle
 
 
-def build_application_controller() -> AppController:
+def build_application_controller(*, start_lifecycle: bool = True) -> AppController:
     """Build the canonical application runtime and return the UI facade."""
     config = load_app_config()
     runtime = build_app_runtime(config)
     lifecycle = AppLifecycle(config=config, runtime=runtime)
-    lifecycle.startup()
+    if start_lifecycle:
+        lifecycle.startup()
     return AppController(lifecycle)

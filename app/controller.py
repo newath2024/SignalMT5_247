@@ -64,12 +64,16 @@ class AppController:
 
     def snapshot(self):
         snapshot = self.engine.snapshot()
+        progress = (snapshot.get("scanner") or {}).get("progress") or {}
+        full_scan_active = self.runtime_state.is_full_scan_active() or (
+            bool(progress.get("active")) and int(progress.get("total") or 0) > 1
+        )
         snapshot["strategy"] = {
             "ob_fvg_mode": self.current_ob_fvg_mode(),
         }
         snapshot["runtime"] = {
             "active_jobs": self.runtime_state.list_active_jobs(),
             "recent_jobs": self.runtime_state.recent_jobs(limit=10),
-            "full_scan_active": self.runtime_state.is_full_scan_active(),
+            "full_scan_active": full_scan_active,
         }
         return snapshot

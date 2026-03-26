@@ -62,9 +62,8 @@ class AppLifecycle:
         return get_ob_fvg_mode()
 
     def shutdown(self) -> None:
-        if not self._started:
-            return
         self.runtime.telegram_bot.stop()
         self.runtime.scanner_service.stop()
         self.runtime.engine.stop()
+        self.runtime.sqlite.close()
         self._started = False

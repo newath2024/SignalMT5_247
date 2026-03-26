@@ -54,7 +54,8 @@ class ScannerCommandService:
             self._stop_event = None
         if stop_event is not None:
             stop_event.set()
-        self._queue.put(None)
+        if worker is not None:
+            self._queue.put(None)
         if worker is not None:
             worker.join(timeout=3.0)
         return True, "Scanner command worker stopped."
