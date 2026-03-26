@@ -101,6 +101,7 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.refresh_button = self.command_bar.refresh_button
         self.clear_log_button = self.command_bar.clear_log_button
         self.export_log_button = self.command_bar.export_log_button
+        self.exit_button = self.command_bar.exit_button
 
         self.actionable_only_checkbox = QCheckBox("Show only setups with edge")
         self.symbol_count_label = QLabel("Tracking 0/0 markets")
@@ -212,6 +213,7 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         self.refresh_button.clicked.connect(self.refresh_snapshot)
         self.clear_log_button.clicked.connect(self.clear_activity_log)
         self.export_log_button.clicked.connect(self.export_logs)
+        self.exit_button.clicked.connect(self.exit_application)
         self.ob_fvg_mode_combo.currentIndexChanged.connect(self.change_ob_fvg_mode)
         self.log_filter.currentIndexChanged.connect(self.refresh_activity_log)
         self.log_symbol_filter.textChanged.connect(self.refresh_activity_log)
@@ -275,6 +277,9 @@ class MainWindow(QMainWindow):  # pragma: no cover - exercised via manual UI smo
         if not ok:
             QMessageBox.information(self, APP_NAME, message)
         self.schedule_snapshot_refresh(immediate=True)
+
+    def exit_application(self) -> None:
+        self.close()
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
         self.controller.shutdown()

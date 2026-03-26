@@ -346,12 +346,15 @@ class CommandBar(PanelCard):
         self.refresh_button = QPushButton("Refresh Panel")
         self.clear_log_button = QPushButton("Clear Telemetry")
         self.export_log_button = QPushButton("Export Telemetry")
+        self.exit_button = QPushButton("Exit")
+        self.exit_button.setProperty("variant", "danger")
         for button in (
             self.rescan_now_button,
             self.rescan_selected_button,
             self.refresh_button,
             self.clear_log_button,
             self.export_log_button,
+            self.exit_button,
         ):
             button.setCursor(Qt.PointingHandCursor)
             action_row.addWidget(button)
