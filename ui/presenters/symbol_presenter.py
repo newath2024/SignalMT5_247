@@ -108,9 +108,7 @@ def build_inspector_model(payload: dict[str, Any]) -> tuple[dict[str, Any], str]
     detail["zone"] = format_detail_text(detail.get("zone"))
     detail["zone_top_bottom"] = format_detail_text(detail.get("zone_top_bottom"))
     detail["htf_zone_source"] = format_detail_text(detail.get("htf_zone_source"))
-    cooldown_value = format_cooldown((payload or {}).get("cooldown_remaining"))
-    if cooldown_value != "-":
-        detail["cooldown_info"] = cooldown_value
+    detail["cooldown_info"] = format_cooldown((payload or {}).get("cooldown_remaining"))
 
     summary_bits = [
         detail["htf_context"],

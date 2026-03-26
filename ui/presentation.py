@@ -4,191 +4,35 @@ from datetime import datetime
 
 
 STATE_META = {
-    "idle": {
-        "label": "Standby",
-        "bg": "#e5e7eb",
-        "fg": "#4b5563",
-        "icon": "⚪",
-        "severity": "neutral",
-    },
-    "context_found": {
-        "label": "Setup Developing",
-        "bg": "#fef3c7",
-        "fg": "#92400e",
-        "icon": "🟡",
-        "severity": "watch",
-    },
-    "htf_context_found": {
-        "label": "HTF Context Found",
-        "bg": "#e0f2fe",
-        "fg": "#075985",
-        "icon": "*",
-        "severity": "watch",
-    },
-    "htf_weak_context": {
-        "label": "HTF Weak Context",
-        "bg": "#fef3c7",
-        "fg": "#92400e",
-        "icon": "*",
-        "severity": "watch",
-    },
-    "session_only_context": {
-        "label": "Weak Structure Context",
-        "bg": "#fef3c7",
-        "fg": "#92400e",
-        "icon": "*",
-        "severity": "watch",
-    },
-    "no_structural_backing": {
-        "label": "No Structural Backing",
-        "bg": "#fee2e2",
-        "fg": "#991b1b",
-        "icon": "*",
-        "severity": "warning",
-    },
-    "awaiting_ltf_sweep": {
-        "label": "Awaiting LTF Sweep",
-        "bg": "#fde68a",
-        "fg": "#92400e",
-        "icon": "*",
-        "severity": "watch",
-    },
-    "sweep_detected": {
-        "label": "Sweep Confirmed",
-        "bg": "#fde68a",
-        "fg": "#92400e",
-        "icon": "*",
-        "severity": "watch",
-    },
-    "awaiting_ifvg": {
-        "label": "Awaiting iFVG",
-        "bg": "#fde68a",
-        "fg": "#92400e",
-        "icon": "*",
-        "severity": "watch",
-    },
-    "triggered": {
-        "label": "Triggered",
-        "bg": "#dcfce7",
-        "fg": "#166534",
-        "icon": "*",
-        "severity": "signal",
-    },
-    "degraded": {
-        "label": "Degraded",
-        "bg": "#fef3c7",
-        "fg": "#92400e",
-        "icon": "*",
-        "severity": "warning",
-    },
-    "invalidated": {
-        "label": "Invalidated",
-        "bg": "#fee2e2",
-        "fg": "#991b1b",
-        "icon": "*",
-        "severity": "warning",
-    },
-    "two_sided_liquidity_taken": {
-        "label": "Two-Sided Sweep",
-        "bg": "#fee2e2",
-        "fg": "#991b1b",
-        "icon": "*",
-        "severity": "warning",
-    },
-    "ambiguous": {
-        "label": "Ambiguous",
-        "bg": "#f3f4f6",
-        "fg": "#4b5563",
-        "icon": "*",
-        "severity": "warning",
-    },
-    "watch_armed": {
-        "label": "Armed",
-        "bg": "#dcfce7",
-        "fg": "#166534",
-        "icon": "🟢",
-        "severity": "watch",
-    },
-    "armed": {
-        "label": "Armed",
-        "bg": "#dcfce7",
-        "fg": "#166534",
-        "icon": "🟢",
-        "severity": "watch",
-    },
-    "setup_building": {
-        "label": "Awaiting Trigger",
-        "bg": "#fde68a",
-        "fg": "#92400e",
-        "icon": "🟡",
-        "severity": "watch",
-    },
-    "waiting_mss": {
-        "label": "Awaiting MSS",
-        "bg": "#fde68a",
-        "fg": "#92400e",
-        "icon": "🟡",
-        "severity": "watch",
-    },
-    "entry_ready": {
-        "label": "Locked Target",
-        "bg": "#dcfce7",
-        "fg": "#166534",
-        "icon": "🟢",
-        "severity": "signal",
-    },
-    "confirmed": {
-        "label": "Locked Target",
-        "bg": "#dcfce7",
-        "fg": "#166534",
-        "icon": "🟢",
-        "severity": "signal",
-    },
-    "alerted": {
-        "label": "Alert Routed",
-        "bg": "#dcfce7",
-        "fg": "#166534",
-        "icon": "🟢",
-        "severity": "signal",
-    },
-    "cooldown": {
-        "label": "Cooling Down",
-        "bg": "#e5e7eb",
-        "fg": "#4b5563",
-        "icon": "⚪",
-        "severity": "neutral",
-    },
-    "rejected": {
-        "label": "No Valid Setup",
-        "bg": "#fee2e2",
-        "fg": "#991b1b",
-        "icon": "🔴",
-        "severity": "warning",
-    },
-    "expired": {
-        "label": "Context Invalid",
-        "bg": "#fee2e2",
-        "fg": "#991b1b",
-        "icon": "🔴",
-        "severity": "warning",
-    },
-    "error": {
-        "label": "Attention",
-        "bg": "#fecaca",
-        "fg": "#7f1d1d",
-        "icon": "🔴",
-        "severity": "error",
-    },
+    "idle": {"label": "Standby", "bg": "#e5e7eb", "fg": "#4b5563", "icon": "o", "severity": "neutral"},
+    "context_found": {"label": "Setup Developing", "bg": "#fef3c7", "fg": "#92400e", "icon": "*", "severity": "watch"},
+    "htf_context_found": {"label": "HTF Context Found", "bg": "#e0f2fe", "fg": "#075985", "icon": "*", "severity": "watch"},
+    "htf_weak_context": {"label": "HTF Weak Context", "bg": "#fef3c7", "fg": "#92400e", "icon": "*", "severity": "watch"},
+    "session_only_context": {"label": "Weak Structure Context", "bg": "#fef3c7", "fg": "#92400e", "icon": "*", "severity": "watch"},
+    "no_structural_backing": {"label": "No Structural Backing", "bg": "#fee2e2", "fg": "#991b1b", "icon": "*", "severity": "warning"},
+    "awaiting_ltf_sweep": {"label": "Awaiting LTF Sweep", "bg": "#fde68a", "fg": "#92400e", "icon": "*", "severity": "watch"},
+    "sweep_detected": {"label": "Sweep Confirmed", "bg": "#fde68a", "fg": "#92400e", "icon": "*", "severity": "watch"},
+    "awaiting_ifvg": {"label": "Awaiting iFVG", "bg": "#fde68a", "fg": "#92400e", "icon": "*", "severity": "watch"},
+    "triggered": {"label": "Triggered", "bg": "#dcfce7", "fg": "#166534", "icon": "+", "severity": "signal"},
+    "degraded": {"label": "Degraded", "bg": "#fef3c7", "fg": "#92400e", "icon": "*", "severity": "warning"},
+    "invalidated": {"label": "Invalidated", "bg": "#fee2e2", "fg": "#991b1b", "icon": "!", "severity": "warning"},
+    "two_sided_liquidity_taken": {"label": "Two-Sided Sweep", "bg": "#fee2e2", "fg": "#991b1b", "icon": "!", "severity": "warning"},
+    "ambiguous": {"label": "Ambiguous", "bg": "#f3f4f6", "fg": "#4b5563", "icon": "!", "severity": "warning"},
+    "watch_armed": {"label": "Armed", "bg": "#dcfce7", "fg": "#166534", "icon": "+", "severity": "watch"},
+    "armed": {"label": "Armed", "bg": "#dcfce7", "fg": "#166534", "icon": "+", "severity": "watch"},
+    "setup_building": {"label": "Awaiting Trigger", "bg": "#fde68a", "fg": "#92400e", "icon": "*", "severity": "watch"},
+    "waiting_mss": {"label": "Awaiting MSS", "bg": "#fde68a", "fg": "#92400e", "icon": "*", "severity": "watch"},
+    "entry_ready": {"label": "Locked Target", "bg": "#dcfce7", "fg": "#166534", "icon": "+", "severity": "signal"},
+    "confirmed": {"label": "Locked Target", "bg": "#dcfce7", "fg": "#166534", "icon": "+", "severity": "signal"},
+    "alerted": {"label": "Alert Routed", "bg": "#dcfce7", "fg": "#166534", "icon": "+", "severity": "signal"},
+    "cooldown": {"label": "Cooling Down", "bg": "#e5e7eb", "fg": "#4b5563", "icon": "o", "severity": "neutral"},
+    "rejected": {"label": "No Valid Setup", "bg": "#fee2e2", "fg": "#991b1b", "icon": "!", "severity": "warning"},
+    "expired": {"label": "Context Invalid", "bg": "#fee2e2", "fg": "#991b1b", "icon": "!", "severity": "warning"},
+    "error": {"label": "Attention", "bg": "#fecaca", "fg": "#7f1d1d", "icon": "!", "severity": "error"},
 }
 
 
-UNKNOWN_STATE_META = {
-    "label": "Unknown",
-    "bg": "#f3f4f6",
-    "fg": "#111827",
-    "icon": "⚪",
-    "severity": "neutral",
-}
+UNKNOWN_STATE_META = {"label": "Unknown", "bg": "#f3f4f6", "fg": "#111827", "icon": "o", "severity": "neutral"}
 
 
 PRIORITY_META = {
@@ -238,7 +82,7 @@ SCANNER_STATUS_META = {
 
 
 def get_state_meta(state: str | None) -> dict[str, str]:
-    key = str(state or "").strip()
+    key = str(state or "").strip().lower()
     if not key:
         return UNKNOWN_STATE_META
     return STATE_META.get(key, {**UNKNOWN_STATE_META, "label": key.replace("_", " ").title()})
@@ -362,7 +206,14 @@ def sort_symbol_rows(rows: list[dict] | None) -> list[dict]:
             return 2
         if state in {"waiting_mss", "setup_building", "sweep_detected"}:
             return 2
-        if state in {"context_found", "htf_context_found", "awaiting_ltf_sweep", "htf_weak_context", "session_only_context", "no_structural_backing"}:
+        if state in {
+            "context_found",
+            "htf_context_found",
+            "awaiting_ltf_sweep",
+            "htf_weak_context",
+            "session_only_context",
+            "no_structural_backing",
+        }:
             return 3
         if state in {"cooldown"}:
             return 4

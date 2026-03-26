@@ -33,6 +33,13 @@ class SymbolRegistry:
                 continue
             if target is None:
                 raise ValueError(f"Alias target is not a configured symbol: {raw_alias} -> {raw_target}")
+            if alias in self._normalized_to_symbol:
+                raise ValueError(f"Alias conflicts with configured symbol: {raw_alias} -> {raw_target}")
+            existing_target = self._aliases.get(alias)
+            if existing_target is not None and existing_target != target:
+                raise ValueError(
+                    f"Alias '{raw_alias}' maps to multiple symbols: {existing_target} and {raw_target}"
+                )
             self._aliases[alias] = target
 
     def get_all_symbols(self) -> list[str]:
@@ -57,7 +64,13 @@ class SymbolRegistry:
         if not normalized:
             return self.get_all_symbols()[:limit]
         choices = self.get_all_symbols()
-        direct = [symbol for symbol in choices if symbol.startswith(normalized)]
+        normalized_choices = {_normalize_token(symbol): symbol for symbol in choices}
+        direct = [
+            symbol
+            for token, symbol in normalized_choices.items()
+            if token.startswith(normalized)
+        ]
         if direct:
             return direct[:limit]
-        return get_close_matches(normalized, choices, n=limit, cutoff=0.35)
+        close_tokens = get_close_matches(normalized, list(normalized_choices.keys()), n=limit, cutoff=0.35)
+        return [normalized_choices[token] for token in close_tokens]

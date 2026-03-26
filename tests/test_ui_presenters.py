@@ -56,6 +56,20 @@ class UiPresenterTests(unittest.TestCase):
         self.assertIn("M5", summary)
         self.assertEqual(format_inspector_value("last_alert_time", None), "-")
 
+    def test_build_inspector_model_resets_stale_cooldown_copy_when_remaining_is_zero(self):
+        detail, _summary = build_inspector_model(
+            {
+                "symbol": "EURUSD",
+                "state": "cooldown",
+                "cooldown_remaining": 0,
+                "detail": {
+                    "cooldown_info": "127s remaining until stale timestamp",
+                },
+            }
+        )
+
+        self.assertEqual(detail["cooldown_info"], "-")
+
 
 if __name__ == "__main__":
     unittest.main()
