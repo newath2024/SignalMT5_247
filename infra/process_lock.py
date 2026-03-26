@@ -86,7 +86,18 @@ class ProcessFileLock:
             except FileExistsError:
                 return False
 
-        os.write(handle, self._identity.encode("ascii", "ignore"))
+        try:
+            os.write(handle, self._identity.encode("ascii", "ignore"))
+        except OSError:
+            try:
+                os.close(handle)
+            except OSError:
+                pass
+            try:
+                self.path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return False
         self._handle = handle
         return True
 
@@ -107,7 +118,7 @@ class ProcessFileLock:
     def _read_identity(self) -> str:
         try:
             return self.path.read_text(encoding="utf-8").strip()
-        except Exception:
+        except OSError:
             return ""
 
     def _current_identity(self) -> str:

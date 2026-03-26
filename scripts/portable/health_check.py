@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from infra.config import load_app_config
-from infra.mt5.runtime import launch_mt5_terminal, load_mt5_runtime_settings, wait_for_mt5_terminal
+from infra.mt5.runtime import _safe_mt5_shutdown, launch_mt5_terminal, load_mt5_runtime_settings, wait_for_mt5_terminal
 from scripts.portable.env_loader import load_portable_environment
 
 
@@ -37,7 +37,7 @@ def main() -> int:
         try:
             config = load_app_config()
             probe_symbol = next(iter(config.scanner.symbols), None)
-        except Exception:
+        except ValueError:
             probe_symbol = None
 
     if args.launch:
@@ -92,10 +92,7 @@ def main() -> int:
         if report.tick_age_sec is not None:
             print(f"tick_age_sec={report.tick_age_sec:.0f}")
 
-    try:
-        mt5.shutdown()
-    except Exception:
-        pass
+    _safe_mt5_shutdown(mt5)
     return 0 if report.ready else 1
 
 

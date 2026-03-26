@@ -31,6 +31,17 @@ class TelegramNotifier:
             "missing_fields": self.missing_fields(),
         }
 
+    @staticmethod
+    def _raise_for_telegram_failure(response) -> None:
+        response.raise_for_status()
+        try:
+            payload = response.json()
+        except ValueError:
+            return
+        if isinstance(payload, dict) and not payload.get("ok", True):
+            description = payload.get("description") or "Telegram API reported ok=false."
+            raise requests.RequestException(str(description))
+
     def _send_message(self, text: str, chat_id: str | None = None):
         url = f"https://api.telegram.org/bot{self.config.bot_token}/sendMessage"
         response = requests.post(
@@ -38,7 +49,7 @@ class TelegramNotifier:
             data={"chat_id": chat_id or self.config.chat_id, "text": text},
             timeout=15,
         )
-        response.raise_for_status()
+        self._raise_for_telegram_failure(response)
 
     def send_text(self, text: str, chat_id: str | None = None) -> tuple[bool, str | None]:
         if not self.config.enabled:
@@ -87,7 +98,7 @@ class TelegramNotifier:
                     files={"htf_chart": htf_file, "ltf_chart": ltf_file},
                     timeout=30,
                 )
-                response.raise_for_status()
+                self._raise_for_telegram_failure(response)
             return True, None
         except requests.RequestException as exc:
             return False, str(exc)

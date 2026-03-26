@@ -193,6 +193,8 @@ def launch_mt5_terminal(settings: MT5RuntimeSettings | None = None, logger: Any 
 def _find_window_handles_for_pid(process_id: int) -> list[int]:
     if process_id <= 0:
         return []
+    if os.name != "nt" or not hasattr(ctypes, "windll"):
+        return []
 
     user32 = ctypes.windll.user32
     handles: list[int] = []
@@ -212,6 +214,15 @@ def _find_window_handles_for_pid(process_id: int) -> list[int]:
 def apply_mt5_window_mode(process_id: int | None, settings: MT5RuntimeSettings | None = None, logger: Any = None) -> bool:
     settings = settings or load_mt5_runtime_settings()
     if not process_id or settings.window_mode == "normal":
+        return False
+    if os.name != "nt" or not hasattr(ctypes, "windll"):
+        _emit(
+            logger,
+            "warn",
+            "MT5 window mode is only supported on Windows.",
+            phase="connection",
+            reason=f"mode={settings.window_mode}",
+        )
         return False
 
     handles = _find_window_handles_for_pid(int(process_id))
@@ -246,6 +257,16 @@ def apply_mt5_window_mode(process_id: int | None, settings: MT5RuntimeSettings |
             reason=f"mode={settings.window_mode}",
         )
     return True
+
+
+def _safe_mt5_shutdown(mt5) -> None:
+    shutdown = getattr(mt5, "shutdown", None)
+    if not callable(shutdown):
+        return
+    try:
+        shutdown()
+    except Exception:
+        return
 
 
 def check_mt5_session(mt5, symbol: str | None = None, settings: MT5RuntimeSettings | None = None) -> MT5SessionReport:
@@ -365,10 +386,7 @@ def connect_mt5_with_retry(mt5, symbol: str | None = None, settings: MT5RuntimeS
     for attempt in range(1, settings.init_retries + 1):
         if attempt > 1:
             time.sleep(settings.init_retry_delay_sec)
-        try:
-            mt5.shutdown()
-        except Exception:
-            pass
+        _safe_mt5_shutdown(mt5)
 
         init_mode = settings.init_mode
         if init_mode == "auto":

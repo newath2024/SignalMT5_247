@@ -72,16 +72,30 @@ class TelegramCommandBot:
         self._process_lock.release()
 
     def _poll_loop(self):
-        while self._stop_event is not None and not self._stop_event.is_set():
+        while self._should_keep_polling():
             try:
                 for update in self._fetch_updates():
                     self._handle_update(update)
+                    if not self._should_keep_polling():
+                        break
             except requests.RequestException as exc:
                 self.logger.error("Telegram polling failed", phase="telegram", reason=str(exc))
-                time.sleep(3)
+                if self._wait_or_stop(3.0):
+                    break
             except Exception as exc:
                 self.logger.error("Telegram command bot crashed", phase="telegram", reason=str(exc))
-                time.sleep(3)
+                if self._wait_or_stop(3.0):
+                    break
+
+    def _should_keep_polling(self) -> bool:
+        stop_event = self._stop_event
+        return stop_event is not None and not stop_event.is_set()
+
+    def _wait_or_stop(self, timeout_sec: float) -> bool:
+        stop_event = self._stop_event
+        if stop_event is None:
+            return True
+        return stop_event.wait(timeout_sec)
 
     def _fetch_updates(self) -> list[dict]:
         url = f"https://api.telegram.org/bot{self.config.bot_token}/getUpdates"

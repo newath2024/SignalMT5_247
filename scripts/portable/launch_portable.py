@@ -15,7 +15,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from infra.config import load_app_config
-from infra.mt5.runtime import apply_mt5_window_mode, launch_mt5_terminal, load_mt5_runtime_settings, wait_for_mt5_terminal
+from infra.mt5.runtime import (
+    _safe_mt5_shutdown,
+    apply_mt5_window_mode,
+    launch_mt5_terminal,
+    load_mt5_runtime_settings,
+    wait_for_mt5_terminal,
+)
 from infra.process_lock import pid_exists
 from scripts.portable.env_loader import load_portable_environment
 
@@ -65,16 +71,30 @@ def _existing_app_instance_pid(home_root: Path) -> int | None:
     if not lock_path.exists():
         return None
     try:
-        pid = int(lock_path.read_text(encoding="utf-8").strip() or "0")
-    except Exception:
+        identity = lock_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    pid = _parse_lock_pid(identity)
+    if pid <= 0:
         return None
     if pid_exists(pid):
         return pid
     try:
         lock_path.unlink(missing_ok=True)
-    except Exception:
+    except OSError:
         pass
     return None
+
+
+def _parse_lock_pid(identity: str) -> int:
+    text = str(identity or "").strip()
+    if not text:
+        return 0
+    pid_text = text.split("|", 1)[0]
+    try:
+        return int(pid_text or "0")
+    except ValueError:
+        return 0
 
 
 def main() -> int:
@@ -108,7 +128,7 @@ def main() -> int:
     try:
         config = load_app_config()
         probe_symbol = next(iter(config.scanner.symbols), None)
-    except Exception as exc:
+    except ValueError as exc:
         logger.warning("Could not load app config before MT5 readiness check: %s", exc)
         probe_symbol = None
 
@@ -119,7 +139,7 @@ def main() -> int:
         except FileNotFoundError as exc:
             logger.error(str(exc))
             return 2
-        except Exception as exc:
+        except OSError as exc:
             logger.error("Failed to launch MT5 portable terminal: %s", exc)
             return 2
 
@@ -138,10 +158,7 @@ def main() -> int:
         )
         return 4
 
-    try:
-        mt5.shutdown()
-    except Exception:
-        pass
+    _safe_mt5_shutdown(mt5)
 
     restart_script = root / "restart_bot.bat"
     if not restart_script.exists():
