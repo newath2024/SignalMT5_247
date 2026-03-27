@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from legacy.bridges.detection import build_signal_from_watch, build_watch_trigger, detect_mss_confirmation, get_ltf_config
+from legacy.scanner.utils import zone_distance
 
 from domain.timeframes import timeframe_rank
 
@@ -10,6 +11,56 @@ _LTF_CONFIG = get_ltf_config()
 SIGNAL_AMBIGUITY_DELTA = _LTF_CONFIG["signal_ambiguity_delta"]
 WATCH_EXPIRY_BARS = _LTF_CONFIG["watch_expiry_bars"]
 WATCH_INVALIDATION_BUFFER_POINTS = _LTF_CONFIG["watch_invalidation_buffer_points"]
+
+
+def _resolve_watch_interaction_price(snapshot, payload=None):
+    if payload is None:
+        return snapshot.get("current_price")
+
+    narrative = payload.get("narrative") or {}
+    primary_sweep = payload.get("primary_sweep") or narrative.get("primary_sweep") or {}
+    for candidate in (
+        payload.get("sweep_price"),
+        payload.get("sweep_level"),
+        primary_sweep.get("sweep_price"),
+        snapshot.get("current_price"),
+    ):
+        if candidate is not None:
+            return float(candidate)
+    return None
+
+
+def _htf_fvg_is_engaged(snapshot, context, payload=None):
+    zone = (context or {}).get("zone") or {}
+    if str(zone.get("type") or "").upper() != "FVG":
+        return True, None
+
+    mitigation_status = str(zone.get("mitigation_status") or (context or {}).get("mitigation_status") or "").lower()
+    mitigation = ((zone.get("fvg_debug") or {}).get("mitigation") or {})
+    if mitigation_status and mitigation_status != "untouched":
+        return True, None
+    if bool(mitigation.get("touched")):
+        return True, None
+
+    low = zone.get("low")
+    high = zone.get("high")
+    interaction_price = _resolve_watch_interaction_price(snapshot, payload)
+    if low is not None and high is not None and interaction_price is not None:
+        tolerance = max(float(zone.get("tolerance") or 0.0), float(snapshot.get("point") or 0.0) * 2.0)
+        if zone_distance(float(interaction_price), float(low), float(high)) <= tolerance:
+            return True, None
+
+    return False, {
+        "reason": "HTF FVG untouched",
+        "debug": {
+            "zone_label": zone.get("label"),
+            "zone_low": low,
+            "zone_high": high,
+            "mitigation_status": zone.get("mitigation_status"),
+            "current_price": snapshot.get("current_price"),
+            "interaction_price": interaction_price,
+        },
+    }
 
 
 def build_watch_key(watch_setup):
@@ -119,6 +170,19 @@ def detect_watch_candidates(snapshot, contexts, confirmation_timeframes):
                         }
                     )
                 continue
+            context_ready, context_rejection = _htf_fvg_is_engaged(snapshot, context, trigger)
+            if not context_ready:
+                rejections.append(
+                    {
+                        "symbol": snapshot["symbol"],
+                        "timeframe": timeframe_name,
+                        "bias": bias,
+                        "phase": "watch",
+                        "reason": context_rejection.get("reason"),
+                        "debug": context_rejection.get("debug"),
+                    }
+                )
+                continue
 
             watch = build_watch_setup(snapshot, context, trigger, timeframe_name)
             watch["active_htf"] = active_htf
@@ -138,6 +202,9 @@ def watch_is_invalidated(snapshot, watch_setup, refreshed_context):
     if refreshed_context is None or not refreshed_context["clear"]:
         return True
     if watch_setup.get("narrative_state") in {"invalidated", "ambiguous", "two_sided_liquidity_taken"}:
+        return True
+    context_ready, _context_rejection = _htf_fvg_is_engaged(snapshot, refreshed_context, watch_setup)
+    if not context_ready:
         return True
 
     rates = snapshot["rates"][watch_setup["timeframe"]]
