@@ -97,8 +97,13 @@ def should_merge_fvg_zones(left, right, point, avg_range):
         return False
     left_indices = _flatten_merged_source_indices(left)
     right_indices = _flatten_merged_source_indices(right)
-    if left_indices and right_indices and min(right_indices) <= max(left_indices) + 1:
-        return True
+    if left_indices and right_indices:
+        left_first = min(left_indices)
+        left_last = max(left_indices)
+        right_first = min(right_indices)
+        right_last = max(right_indices)
+        if right_first == left_last + 1 or left_first == right_last + 1:
+            return True
 
     left_low = float(min(left["low"], left["high"]))
     left_high = float(max(left["low"], left["high"]))
@@ -303,51 +308,100 @@ def merge_fvg_zones(zones, point, avg_range, timeframe_name):
     return merged
 
 
+def _build_fvg_zone(candidate, validation, timeframe_name, zone_builder):
+    return zone_builder(
+        label=f"{timeframe_name} FVG",
+        timeframe=timeframe_name,
+        zone_type="FVG",
+        bias=candidate["bias"],
+        low=candidate["low"],
+        high=candidate["high"],
+        quality=validation["quality"],
+        source_index=candidate["source_index"],
+        formed_in_displacement=validation["formed_in_displacement"],
+        geometric_fvg=True,
+        valid_fvg=validation["valid"],
+        tradable=validation["tradable"],
+        displacement_strength=validation["displacement_strength"],
+        after_bos=validation["after_bos"],
+        near_liquidity_sweep=validation["near_liquidity_sweep"],
+        trend=validation["trend"],
+        trend_aligned=validation["trend_aligned"],
+        location_in_range=validation["location_in_range"],
+        fvg_class=validation["fvg_class"],
+        mitigation_status=validation["mitigation_status"],
+        mitigation_ratio=validation["mitigation_ratio"],
+        follow_through_strength=validation["follow_through_strength"],
+        follow_through_confirmed=validation["follow_through_confirmed"],
+        follow_through_fill_ratio=validation["follow_through_fill_ratio"],
+        quality_components=validation["quality_components"],
+        quality_penalties=validation["quality_penalties"],
+        context_signals=validation["context_signals"],
+        rejection_reason=validation["rejection_reason"],
+        bos_index=validation["bos_index"],
+        sweep_index=validation["sweep_index"],
+        fvg_debug=validation["debug"],
+    )
+
+
+def _merge_consecutive_fvg_clusters(zones, point, avg_range, timeframe_name):
+    if not zones:
+        return []
+
+    ordered = sorted(
+        zones,
+        key=lambda zone: (
+            str(zone.get("timeframe") or timeframe_name).upper(),
+            str(zone.get("bias") or ""),
+            int(zone.get("source_index") or 0),
+        ),
+    )
+    merged = []
+    cluster = []
+
+    for zone in ordered:
+        candidate = dict(zone)
+        candidate.setdefault("timeframe", timeframe_name)
+        if not cluster:
+            cluster = [candidate]
+            continue
+
+        previous = cluster[-1]
+        same_bias = previous.get("bias") == candidate.get("bias")
+        same_timeframe = str(previous.get("timeframe") or timeframe_name).upper() == str(candidate.get("timeframe") or timeframe_name).upper()
+        previous_source = int(previous.get("source_index") or 0)
+        current_source = int(candidate.get("source_index") or 0)
+
+        if same_bias and same_timeframe and current_source <= previous_source + 1:
+            cluster.append(candidate)
+            continue
+
+        if any(bool(item.get("_keep_candidate")) for item in cluster):
+            merged.append(_merge_fvg_cluster(cluster, point, avg_range, timeframe_name))
+        cluster = [candidate]
+
+    if cluster and any(bool(item.get("_keep_candidate")) for item in cluster):
+        merged.append(_merge_fvg_cluster(cluster, point, avg_range, timeframe_name))
+
+    return merged
+
+
 def find_fvgs(rates, timeframe_name, avg_range, point, zone_builder):
     swings = build_swing_structure(rates, avg_range)
     zones = []
     for candidate in find_fvg_candidates(rates):
         validation = assess_fvg_candidate(candidate, rates, timeframe_name, avg_range, point, swings=swings)
-        if not validation["keep"]:
+        if not validation["valid"]:
             continue
 
-        zones.append(
-            zone_builder(
-                label=f"{timeframe_name} FVG",
-                timeframe=timeframe_name,
-                zone_type="FVG",
-                bias=candidate["bias"],
-                low=candidate["low"],
-                high=candidate["high"],
-                quality=validation["quality"],
-                source_index=candidate["source_index"],
-                formed_in_displacement=validation["formed_in_displacement"],
-                geometric_fvg=True,
-                valid_fvg=validation["valid"],
-                tradable=validation["tradable"],
-                displacement_strength=validation["displacement_strength"],
-                after_bos=validation["after_bos"],
-                near_liquidity_sweep=validation["near_liquidity_sweep"],
-                trend=validation["trend"],
-                trend_aligned=validation["trend_aligned"],
-                location_in_range=validation["location_in_range"],
-                fvg_class=validation["fvg_class"],
-                mitigation_status=validation["mitigation_status"],
-                mitigation_ratio=validation["mitigation_ratio"],
-                follow_through_strength=validation["follow_through_strength"],
-                follow_through_confirmed=validation["follow_through_confirmed"],
-                follow_through_fill_ratio=validation["follow_through_fill_ratio"],
-                quality_components=validation["quality_components"],
-                quality_penalties=validation["quality_penalties"],
-                context_signals=validation["context_signals"],
-                rejection_reason=validation["rejection_reason"],
-                bos_index=validation["bos_index"],
-                sweep_index=validation["sweep_index"],
-                fvg_debug=validation["debug"],
-            )
-        )
+        zone = _build_fvg_zone(candidate, validation, timeframe_name, zone_builder)
+        zone["_keep_candidate"] = bool(validation["keep"])
+        zones.append(zone)
 
+    zones = _merge_consecutive_fvg_clusters(zones, point, avg_range, timeframe_name)
     zones = merge_fvg_zones(zones, point, avg_range, timeframe_name)
+    for zone in zones:
+        zone.pop("_keep_candidate", None)
     zones.sort(
         key=lambda zone: (
             zone["quality"],

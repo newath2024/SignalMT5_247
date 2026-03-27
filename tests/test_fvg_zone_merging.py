@@ -1,10 +1,12 @@
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
 from domain.engine.reasoning import format_htf_zone
 from legacy.scanner.htf.filters import is_fvg_valid
-from legacy.scanner.patterns.fvg import merge_fvg_zones
+from legacy.scanner.htf.zones import make_zone
+from legacy.scanner.patterns.fvg import find_fvgs, merge_fvg_zones
 
 
 def _zone(*, bias, low, high, source_index, timeframe="H4", quality=0.7, tradable=True, formed=False):
@@ -129,6 +131,35 @@ class FvgZoneMergingTests(unittest.TestCase):
         self.assertEqual(merged[0]["low"], 1.4000)
         self.assertEqual(merged[0]["high"], 1.4035)
 
+    def test_reversed_price_order_consecutive_sources_still_merge(self):
+        zones = [
+            _zone(bias="Short", low=1.15265, high=1.15341, source_index=168, timeframe="M30"),
+            _zone(bias="Short", low=1.15351, high=1.15380, source_index=167, timeframe="M30"),
+        ]
+
+        merged = merge_fvg_zones(zones, point=0.00001, avg_range=0.00060, timeframe_name="M30")
+
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["merged_source_indices"], [167, 168])
+        self.assertEqual(merged[0]["low"], 1.15265)
+        self.assertEqual(merged[0]["high"], 1.15380)
+
+    def test_far_older_source_does_not_merge_only_because_price_sort_puts_it_on_the_right(self):
+        zones = [
+            _zone(bias="Short", low=1.15265, high=1.15380, source_index=167, timeframe="M30"),
+            _zone(bias="Short", low=1.16131, high=1.16178, source_index=61, timeframe="M30"),
+        ]
+
+        merged = merge_fvg_zones(zones, point=0.00001, avg_range=0.00060, timeframe_name="M30")
+
+        self.assertEqual(len(merged), 2)
+        self.assertEqual(merged[0]["merged_source_indices"], [167])
+        self.assertEqual(merged[0]["low"], 1.15265)
+        self.assertEqual(merged[0]["high"], 1.15380)
+        self.assertEqual(merged[1]["merged_source_indices"], [61])
+        self.assertEqual(merged[1]["low"], 1.16131)
+        self.assertEqual(merged[1]["high"], 1.16178)
+
     def test_cluster_merge_uses_aggregate_envelope_not_only_last_zone(self):
         zones = [
             _zone(bias="Short", low=1.3335, high=1.3338, source_index=70, timeframe="M30"),
@@ -192,6 +223,111 @@ class FvgZoneMergingTests(unittest.TestCase):
         rendered = format_htf_zone({"zone": merged, "bias": "Long"}, None, None)
 
         self.assertIn("1.5-1.5022", rendered)
+
+    def test_find_fvgs_keeps_adjacent_usable_component_inside_merged_cluster(self):
+        candidates = [
+            {"bias": "Short", "low": 212.853, "high": 212.879, "source_index": 161},
+            {"bias": "Short", "low": 212.522, "high": 212.633, "source_index": 173},
+            {"bias": "Short", "low": 212.348, "high": 212.523, "source_index": 174},
+        ]
+        validations = {
+            161: {
+                "valid": True,
+                "tradable": False,
+                "keep": False,
+                "quality": 0.0,
+                "formed_in_displacement": False,
+                "displacement_strength": "weak",
+                "after_bos": False,
+                "near_liquidity_sweep": False,
+                "trend": "Bearish",
+                "trend_aligned": True,
+                "location_in_range": "premium",
+                "fvg_class": "weak_fvg",
+                "mitigation_status": "deep_mitigated",
+                "mitigation_ratio": 0.88,
+                "follow_through_strength": "weak",
+                "follow_through_confirmed": False,
+                "follow_through_fill_ratio": 0.91,
+                "quality_components": {"base": 0.18, "timeframe": 0.08, "width": 0.02},
+                "quality_penalties": {"mitigation": 0.2},
+                "context_signals": 0,
+                "rejection_reason": "gap did not form inside a meaningful displacement leg",
+                "bos_index": None,
+                "sweep_index": None,
+                "debug": {},
+            },
+            173: {
+                "valid": True,
+                "tradable": True,
+                "keep": True,
+                "quality": 0.96,
+                "formed_in_displacement": True,
+                "displacement_strength": "strong",
+                "after_bos": True,
+                "near_liquidity_sweep": False,
+                "trend": "Bearish",
+                "trend_aligned": True,
+                "location_in_range": "premium",
+                "fvg_class": "trend_fvg",
+                "mitigation_status": "untouched",
+                "mitigation_ratio": 0.0,
+                "follow_through_strength": "strong",
+                "follow_through_confirmed": True,
+                "follow_through_fill_ratio": 0.0,
+                "quality_components": {"base": 0.18, "timeframe": 0.08, "width": 0.24, "displacement": 0.2},
+                "quality_penalties": {},
+                "context_signals": 2,
+                "rejection_reason": None,
+                "bos_index": 170,
+                "sweep_index": None,
+                "debug": {},
+            },
+            174: {
+                "valid": True,
+                "tradable": False,
+                "keep": False,
+                "quality": 0.32,
+                "formed_in_displacement": False,
+                "displacement_strength": "medium",
+                "after_bos": True,
+                "near_liquidity_sweep": False,
+                "trend": "Bearish",
+                "trend_aligned": True,
+                "location_in_range": "premium",
+                "fvg_class": "internal_fvg",
+                "mitigation_status": "deep_mitigated",
+                "mitigation_ratio": 0.74,
+                "follow_through_strength": "weak",
+                "follow_through_confirmed": False,
+                "follow_through_fill_ratio": 0.82,
+                "quality_components": {"base": 0.18, "timeframe": 0.08, "width": 0.2, "displacement": 0.1},
+                "quality_penalties": {"mitigation": 0.16},
+                "context_signals": 1,
+                "rejection_reason": "post-formation continuation was too weak or the gap was filled too quickly",
+                "bos_index": 170,
+                "sweep_index": None,
+                "debug": {},
+            },
+        }
+
+        def _validation(candidate, *_args, **_kwargs):
+            return validations[candidate["source_index"]]
+
+        with (
+            patch("legacy.scanner.patterns.fvg.build_swing_structure", return_value={"highs": [], "lows": []}),
+            patch("legacy.scanner.patterns.fvg.find_fvg_candidates", return_value=candidates),
+            patch("legacy.scanner.patterns.fvg.assess_fvg_candidate", side_effect=_validation),
+        ):
+            zones = find_fvgs(_rates([]), "M15", avg_range=0.1234, point=0.001, zone_builder=make_zone)
+
+        self.assertEqual(len(zones), 1)
+        self.assertEqual(zones[0]["source_index"], 173)
+        self.assertEqual(zones[0]["merged_source_indices"], [173, 174])
+        self.assertEqual(zones[0]["component_count"], 2)
+        self.assertEqual(zones[0]["low"], 212.348)
+        self.assertEqual(zones[0]["high"], 212.633)
+        self.assertEqual(zones[0]["mitigation_status"], "deep_mitigated")
 
 
 if __name__ == "__main__":
