@@ -64,7 +64,8 @@ class Mt5RuntimeTests(unittest.TestCase):
             ready_symbol=None,
         )
 
-        report = connect_mt5_with_retry(mt5, settings=settings, logger=MagicMock())
+        with patch("infra.mt5.runtime._is_matching_terminal_running", return_value=True):
+            report = connect_mt5_with_retry(mt5, settings=settings, logger=MagicMock())
 
         self.assertFalse(report.ready)
         self.assertEqual(report.state, "initialize_failed")

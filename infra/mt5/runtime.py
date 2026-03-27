@@ -49,8 +49,29 @@ class MT5SessionReport:
 MT5RuntimeReport = MT5SessionReport
 
 
+def _read_portable_env_file() -> dict[str, str]:
+    env_path = PROJECT_ROOT / "portable.env"
+    values: dict[str, str] = {}
+    if not env_path.exists():
+        return values
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def _get_mt5_setting(name: str) -> str | None:
+    value = os.getenv(name)
+    if value is not None:
+        return value
+    return _read_portable_env_file().get(name)
+
+
 def _env_flag(name: str, default: bool) -> bool:
-    raw_value = os.getenv(name)
+    raw_value = _get_mt5_setting(name)
     if raw_value is None:
         return default
     value = str(raw_value).strip().lower()
@@ -62,7 +83,7 @@ def _env_flag(name: str, default: bool) -> bool:
 
 
 def _env_int(name: str, default: int, minimum: int = 0) -> int:
-    raw_value = os.getenv(name)
+    raw_value = _get_mt5_setting(name)
     if raw_value is None:
         return default
     try:
@@ -72,7 +93,7 @@ def _env_int(name: str, default: int, minimum: int = 0) -> int:
 
 
 def _env_float(name: str, default: float, minimum: float = 0.0) -> float:
-    raw_value = os.getenv(name)
+    raw_value = _get_mt5_setting(name)
     if raw_value is None:
         return default
     try:
@@ -120,19 +141,19 @@ def _session_message(state: str, message: str, **kwargs) -> MT5SessionReport:
 
 
 def load_mt5_runtime_settings() -> MT5RuntimeSettings:
-    portable_root = Path(os.getenv("OPENCLAW_PORTABLE_ROOT") or PROJECT_ROOT).expanduser().resolve()
+    portable_root = Path(_get_mt5_setting("OPENCLAW_PORTABLE_ROOT") or PROJECT_ROOT).expanduser().resolve()
     terminal_path = _resolve_path(
-        os.getenv("OPENCLAW_MT5_TERMINAL"),
+        _get_mt5_setting("OPENCLAW_MT5_TERMINAL"),
         portable_root,
     )
     if terminal_path is None:
         terminal_path = (portable_root / "mt5_portable" / "terminal64.exe").resolve()
 
-    window_mode = str(os.getenv("OPENCLAW_MT5_WINDOW_MODE", "normal")).strip().lower()
+    window_mode = str(_get_mt5_setting("OPENCLAW_MT5_WINDOW_MODE") or "normal").strip().lower()
     if window_mode not in {"normal", "minimize", "hide"}:
         window_mode = "normal"
 
-    init_mode = str(os.getenv("OPENCLAW_MT5_INIT_MODE", "auto")).strip().lower()
+    init_mode = str(_get_mt5_setting("OPENCLAW_MT5_INIT_MODE") or "auto").strip().lower()
     if init_mode not in {"auto", "path", "attach"}:
         init_mode = "auto"
 
@@ -148,8 +169,41 @@ def load_mt5_runtime_settings() -> MT5RuntimeSettings:
         require_saved_session=_env_flag("OPENCLAW_MT5_REQUIRE_SAVED_SESSION", True),
         max_tick_age_sec=_env_int("OPENCLAW_MT5_TICK_MAX_AGE_SEC", 0, minimum=0),
         window_mode=window_mode,
-        ready_symbol=_coerce_symbol(os.getenv("OPENCLAW_MT5_READY_SYMBOL")),
+        ready_symbol=_coerce_symbol(_get_mt5_setting("OPENCLAW_MT5_READY_SYMBOL")),
     )
+
+
+def _running_terminal_paths() -> set[str]:
+    if os.name != "nt":
+        return set()
+    try:
+        completed = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "Get-Process terminal64 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+
+    paths: set[str] = set()
+    for raw_line in str(completed.stdout or "").splitlines():
+        value = raw_line.strip()
+        if value:
+            paths.add(str(Path(value).resolve()).lower())
+    return paths
+
+
+def _is_matching_terminal_running(terminal_path: Path | None) -> bool:
+    if terminal_path is None:
+        return False
+    return str(terminal_path.resolve()).lower() in _running_terminal_paths()
 
 
 def resolve_probe_symbol(explicit_symbol: str | None = None) -> str | None:
@@ -391,6 +445,20 @@ def connect_mt5_with_retry(mt5, symbol: str | None = None, settings: MT5RuntimeS
         init_mode = settings.init_mode
         if init_mode == "auto":
             init_mode = "attach" if settings.auto_launch else "path"
+
+        if not settings.auto_launch:
+            if init_mode == "path" and not _is_matching_terminal_running(settings.terminal_path):
+                return _session_message(
+                    "terminal_not_running",
+                    f"MT5 auto-launch is disabled and the configured terminal is not running: {settings.terminal_path}",
+                    terminal_path=settings.terminal_path,
+                )
+            if init_mode == "attach" and not _running_terminal_paths():
+                return _session_message(
+                    "terminal_not_running",
+                    "MT5 auto-launch is disabled and no running MT5 terminal was found.",
+                    terminal_path=settings.terminal_path,
+                )
 
         if init_mode == "attach":
             initialized = mt5.initialize()
